@@ -8,6 +8,7 @@
     "serve": "vite preview"
   },
   "dependencies": {
+    "@cloudflare/kv-asset-handler": "^0.3.4",
     "@noble/secp256k1": "^2.2.3",
     "element-plus": "^2.3.8",
     "tronweb": "^5.3.0",

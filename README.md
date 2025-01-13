@@ -2,6 +2,10 @@
 
 一个功能强大的 Tron 区块链交易扫描工具，支持多网络、多代币类型的交易备注扫描。
 
+## 在线访问
+
+- 主要访问地址：[https://tron-scanner.pages.dev](https://tron-scanner.pages.dev)
+
 ## 主要功能
 
 ### 基础功能
@@ -32,41 +36,81 @@
 - 支持一键复制地址
 - 支持直接跳转到区块浏览器查看详情
 
-## 使用说明
+## 本地开发
 
-1. **网络选择**
-   - 在顶部选择要扫描的网络（主网/测试网）
-   - 切换网络后会自动刷新最新区块信息
+### 环境要求
+- Node.js >= 16
+- npm >= 8
 
-2. **扫描范围设置**
-   - 可以手动输入起始和结束区块
-   - 可以使用快速选择按钮（今日、昨日、近7天等）
-   - 可以选择扫描顺序（从小到大或从大到小）
+### 安装步骤
 
-3. **过滤设置**
-   - 在备注过滤框中输入关键词（多个关键词用空格分隔）
-   - 可以选择是否只显示中文备注
-   - 可以设置地址白名单或黑名单
-   - 可以选择按发送方或接收方地址过滤
+1. 克隆项目
+```bash
+git clone https://github.com/yourusername/tron-scanner.git
+cd tron-scanner
+```
 
-4. **高级选项**
-   - 可以开启智能合约地址检测
-   - 可以启用并行扫描并设置线程数
-   - 可以开启智能限速功能
-   - 可以启用自动采集功能并设置采集间隔
+2. 安装依赖
+```bash
+npm install
+```
 
-5. **扫描结果**
-   - 显示扫描进度和统计信息
-   - 表格形式展示所有符合条件的交易
-   - 可以对地址进行快速操作（添加白名单/黑名单、复制）
-   - 可以点击交易哈希或地址直接跳转到区块浏览器
+3. 启动开发服务器
+```bash
+npm run dev
+```
+
+4. 构建生产版本
+```bash
+npm run build
+```
+
+## 部署说明
+
+### Cloudflare Pages 部署
+
+1. 安装 Wrangler CLI
+```bash
+npm install -g wrangler
+```
+
+2. 登录到 Cloudflare
+```bash
+wrangler login
+```
+
+3. 构建项目
+```bash
+npm run build
+```
+
+4. 部署到 Cloudflare Pages
+```bash
+wrangler pages deploy dist
+```
+
+### 自定义域名配置
+
+1. 登录 Cloudflare 控制面板
+2. 进入 Pages 项目设置
+3. 在"自定义域"部分添加您的域名
+4. 按照提示配置 DNS 记录
+
+### 更新部署
+
+当需要更新网站时，执行以下命令：
+```bash
+npm run build
+wrangler pages deploy dist
+```
 
 ## 技术栈
 
-- Vue 3
-- Element Plus
-- TronWeb
-- Vite
+- Vue 3 - 前端框架
+- Element Plus - UI 组件库
+- TronWeb - TRON 区块链交互
+- Vite - 构建工具
+- Cloudflare Pages - 部署平台
 
 ## 注意事项
 
@@ -74,6 +118,7 @@
 2. 大范围扫描时建议使用并行扫描功能
 3. 自动采集功能会持续监控新区块，请根据需要设置合适的采集间隔
 4. 所有设置（除自动采集相关）都会自动保存到本地
+5. Cloudflare Pages 免费版有一定的限制，请合理使用
 
 ## 更新日志
 
@@ -81,7 +126,7 @@
 - 优化了自动采集功能，支持累计扫描统计
 - 调整了功能设置区域布局，提升用户体验
 - 移除了状态保存对自动采集的影响
-- 清理了项目结构，移除无用文件夹
+- 完成了 Cloudflare Pages 部署支持
 - 优化了界面样式和响应式布局
 
 ## 开发计划
@@ -90,4 +135,18 @@
 - [ ] 添加更多代币信息显示
 - [ ] 支持自定义显示列
 - [ ] 添加更多过滤条件
-- [ ] 优化大量数据时的性能 
+- [ ] 优化大量数据时的性能
+- [ ] 添加多语言支持
+- [ ] 集成更多区块链浏览器
+
+## 贡献指南
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 提交 Pull Request
+
+## 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情 
