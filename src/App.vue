@@ -198,50 +198,56 @@
 
     <!-- 扫描结果 -->
     <div v-if="loading || transactions.length > 0" class="results">
-      <h2>扫描结果</h2>
-      <div class="scan-stats">
-        <el-descriptions :column="4" border>
-          <el-descriptions-item label="扫描区块数">
-            {{ form.endBlock - form.startBlock + 1 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="成功区块数">
-            {{ successBlocks }}
-          </el-descriptions-item>
-          <el-descriptions-item label="失败区块数">
-            {{ failedBlocks }}
-          </el-descriptions-item>
-          <el-descriptions-item label="找到交易数">
-            {{ transactions.length }}
-          </el-descriptions-item>
-        </el-descriptions>
+      <div class="results-header">
+        <h2 style="display: inline-block; margin-right: 20px; margin-bottom: 0;">扫描结果</h2>
+        <div class="scan-stats" style="display: inline-block;">
+          <el-descriptions :column="4" border size="small">
+            <el-descriptions-item label="扫描区块数">
+              {{ form.endBlock - form.startBlock + 1 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="成功区块数">
+              {{ successBlocks }}
+            </el-descriptions-item>
+            <el-descriptions-item label="失败区块数">
+              {{ failedBlocks }}
+            </el-descriptions-item>
+            <el-descriptions-item label="找到交易数">
+              {{ transactions.length }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
       </div>
+
       <el-table 
         :data="transactions" 
-        style="width: 100%" 
+        style="width: 100%; margin-top: 15px;" 
         class="custom-table" 
         border
         :resizable="false"
         :table-layout="fixed"
       >
-        <el-table-column prop="block" label="区块" width="100">
+        <el-table-column prop="block" label="区块" width="100" align="center">
           <template #default="{ row }">
             <span class="fixed-content">{{ row.block }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="timestamp" label="时间" width="140">
+
+        <el-table-column prop="timestamp" label="时间" width="160" align="center">
           <template #default="{ row }">
-            <span class="fixed-content">{{ formatTime(row.timestamp) }}</span>
+            <span class="fixed-content" style="white-space: nowrap; font-family: monospace;">{{ formatTime(row.timestamp) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="hash" label="交易哈希" width="160">
+
+        <el-table-column prop="hash" label="交易哈希" width="160" align="center">
           <template #default="{ row }">
             <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link" style="white-space: nowrap; display: inline-block;">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
           </template>
         </el-table-column>
-        <el-table-column prop="from" label="发送方" width="280">
+
+        <el-table-column prop="from" label="发送方" width="240" align="center">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 2px">
-              <span style="min-width: 130px; font-family: monospace;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 2px">
+              <span style="min-width: 120px; font-family: monospace;">
                 <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
                   {{ formatAddress(row.from, row.fromIsContract) }}
                 </a>
@@ -254,10 +260,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="to" label="接收方" width="280">
+
+        <el-table-column prop="to" label="接收方" width="240" align="center">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 2px">
-              <span style="min-width: 130px; font-family: monospace;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 2px">
+              <span style="min-width: 120px; font-family: monospace;">
                 <template v-if="row.to === '(合约创建)'">
                   <span class="contract-address">{{ row.to }}</span>
                 </template>
@@ -275,11 +282,35 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="amount" label="金额" width="100">
+
+        <el-table-column prop="amount" label="金额" width="100" align="center">
           <template #default="{ row }">
             <span class="fixed-content">{{ row.amount }}</span>
           </template>
         </el-table-column>
+
+        <el-table-column prop="type" label="代币类型" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag 
+              :type="row.type === 'TriggerSmartContract' ? 'warning' : 'success'"
+              size="small"
+            >
+              {{ row.type === 'TriggerSmartContract' ? 'TRC20' : 'TRX' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="tokenName" label="代币名称" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag 
+              type="info"
+              size="small"
+            >
+              {{ row.tokenName || 'TRX' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="note" label="备注" min-width="500">
           <template #default="{ row }">
             <div class="note-content">{{ row.note }}</div>
@@ -548,9 +579,19 @@ const processTransaction = async (tx, blockNum, contract) => {
         const { value } = contract.parameter
         const fromAddress = tronWeb.address.fromHex(value.owner_address || value.from || value.from_address)
         let toAddress = ''
+        let tokenName = 'TRX'
         
         try {
           toAddress = tronWeb.address.fromHex(value.to_address || value.to)
+          // 如果是TRC20交易，尝试获取代币名称
+          if (contract.type === 'TriggerSmartContract' && value.contract_address) {
+            try {
+              const tokenContract = await tronWeb.contract().at(tronWeb.address.fromHex(value.contract_address))
+              tokenName = await tokenContract.symbol().call()
+            } catch (e) {
+              console.warn('获取代币名称失败:', e)
+            }
+          }
         } catch (e) {
           console.warn('无法解析接收方地址:', e)
         }
@@ -578,6 +619,7 @@ const processTransaction = async (tx, blockNum, contract) => {
             toIsContract: isToContract,
             amount: value.amount ? value.amount / 1000000 : '转账',
             type: contract.type,
+            tokenName,
             note
           }
         }
@@ -941,7 +983,7 @@ const formatBlocksToTime = (blocks) => {
 
 <style scoped>
 .container {
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
   padding: 10px;
 }
@@ -1249,5 +1291,27 @@ h2 {
   text-decoration: underline;
   color: #66b1ff;
   background-color: #e6f2ff;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+}
+
+.scan-stats {
+  flex: 1;
+  margin: 0;
+}
+
+:deep(.scan-stats .el-descriptions) {
+  margin: 0;
+}
+
+:deep(.scan-stats .el-descriptions__cell) {
+  padding: 8px 12px;
 }
 </style> 
