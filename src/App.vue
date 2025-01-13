@@ -75,11 +75,17 @@
       <!-- 第四行：过滤选项 -->
       <div class="form-row">
         <el-form-item label="备注过滤">
-          <el-input
-            v-model="form.noteFilter"
-            placeholder="输入关键词过滤掉包含这些关键词的交易（多个关键词用空格分隔）"
-            clearable
-          />
+          <div style="display: flex; align-items: center; gap: 15px;">
+            <el-input
+              v-model="form.noteFilter"
+              placeholder="输入关键词过滤掉包含这些关键词的交易（多个关键词用空格分隔）"
+              clearable
+              style="width: 500px;"
+            />
+            <el-checkbox v-model="form.filterChineseOnly">
+              仅显示中文备注
+            </el-checkbox>
+          </div>
         </el-form-item>
       </div>
 
@@ -376,6 +382,7 @@ const form = ref({
   scanOrder: 'desc',
   tokenTypes: ['TRX'],
   noteFilter: '',
+  filterChineseOnly: false,
   addressFilterMode: 'none',
   addressFilterType: 'both',
   enableContractCheck: false,
@@ -537,6 +544,10 @@ const progressFormat = (percentage) => {
 }
 
 const shouldFilterNote = (note) => {
+  if (form.value.filterChineseOnly && !/[\u4e00-\u9fa5]/.test(note)) {
+    return true
+  }
+  
   if (!form.value.noteFilter) return false
   const keywords = form.value.noteFilter.toLowerCase().split(/\s+/).filter(k => k)
   if (keywords.length === 0) return false
@@ -850,6 +861,7 @@ const saveSettings = () => {
       endBlock: form.value.endBlock,
       
       noteFilter: form.value.noteFilter,
+      filterChineseOnly: form.value.filterChineseOnly,
       addressFilterMode: form.value.addressFilterMode,
       addressFilterType: form.value.addressFilterType,
       networkAddressLists: networkAddressLists.value,
@@ -873,6 +885,7 @@ watch(() => ({
   startBlock: form.value.startBlock,
   endBlock: form.value.endBlock,
   noteFilter: form.value.noteFilter,
+  filterChineseOnly: form.value.filterChineseOnly,
   addressFilterMode: form.value.addressFilterMode,
   addressFilterType: form.value.addressFilterType,
   networkAddressLists: networkAddressLists.value,
