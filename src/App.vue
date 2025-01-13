@@ -325,7 +325,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import TronWeb from 'tronweb'
 
@@ -377,6 +377,7 @@ const addressInput = ref('')
 const contractCache = ref(new Map())
 const successBlocks = ref(0)
 const failedBlocks = ref(0)
+const isInitialLoad = ref(true)
 
 const rateLimiter = {
   queue: [],
@@ -809,6 +810,9 @@ const loadSettings = () => {
 }
 
 const saveSettings = () => {
+  if (isInitialLoad.value) {
+    return
+  }
   try {
     localStorage.setItem('tronScannerSettings', JSON.stringify({
       network: form.value.network,
@@ -852,11 +856,18 @@ watch(() => ({
   autoThrottle: form.value.autoThrottle
 }), () => {
   saveSettings()
-}, { deep: true })
+}, { 
+  deep: true,
+  immediate: false 
+})
 
 onMounted(async () => {
   loadSettings()
   await refreshLatestBlock()
+  // 延迟设置 isInitialLoad 为 false，确保初始化完成
+  nextTick(() => {
+    isInitialLoad.value = false
+  })
 })
 
 const getExplorerBaseUrl = () => {
