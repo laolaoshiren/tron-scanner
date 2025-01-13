@@ -57,6 +57,12 @@
           
           <div class="quick-select">
             <el-button-group class="mb-10">
+              <el-button @click="selectTimeRange('today')">今日</el-button>
+              <el-button @click="selectTimeRange('yesterday')">昨日</el-button>
+              <el-button @click="selectTimeRange('7days')">近7天</el-button>
+              <el-button @click="selectTimeRange('15days')">近15天</el-button>
+            </el-button-group>
+            <el-button-group class="mb-10">
               <el-button @click="selectLastNBlocks(100)">最近100个区块</el-button>
               <el-button @click="selectLastNBlocks(1000)">最近1000个区块</el-button>
               <el-button @click="selectLastNBlocks(10000)">最近1万个区块</el-button>
@@ -692,6 +698,71 @@ const copyAddress = async (address) => {
     console.error('复制失败:', err)
     ElMessage.error('复制失败，请手动复制')
   }
+}
+
+// 根据时间范围选择区块
+const selectTimeRange = (range) => {
+  if (!latestBlock.value) {
+    ElMessage.warning('请等待获取最新区块号')
+    return
+  }
+
+  const BLOCKS_PER_DAY = 28800  // 3秒一个区块，一天约28800个区块
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())  // 今天0:00
+  const yesterdayStart = new Date(todayStart)
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1)  // 昨天0:00
+  const sevenDaysAgoStart = new Date(todayStart)
+  sevenDaysAgoStart.setDate(sevenDaysAgoStart.getDate() - 7)  // 7天前0:00
+  const fifteenDaysAgoStart = new Date(todayStart)
+  fifteenDaysAgoStart.setDate(fifteenDaysAgoStart.getDate() - 15)  // 15天前0:00
+
+  // 计算最新区块对应的时间戳（秒）
+  const latestBlockTime = Math.floor(Date.now() / 1000)
+  let startBlock, endBlock
+
+  switch (range) {
+    case 'today': {
+      // 计算今天0点对应的区块
+      const secondsSinceLatestBlock = latestBlockTime - Math.floor(todayStart.getTime() / 1000)
+      const blocksSinceStart = Math.floor(secondsSinceLatestBlock / 3)
+      startBlock = latestBlock.value - blocksSinceStart
+      endBlock = latestBlock.value
+      break
+    }
+    case 'yesterday': {
+      // 计算昨天0点和今天0点对应的区块
+      const secondsSinceLatestBlock = latestBlockTime - Math.floor(todayStart.getTime() / 1000)
+      const blocksSinceToday = Math.floor(secondsSinceLatestBlock / 3)
+      const yesterdayBlocks = BLOCKS_PER_DAY
+      startBlock = latestBlock.value - blocksSinceToday - yesterdayBlocks
+      endBlock = latestBlock.value - blocksSinceToday
+      break
+    }
+    case '7days': {
+      // 计算7天前0点对应的区块
+      const secondsSinceLatestBlock = latestBlockTime - Math.floor(sevenDaysAgoStart.getTime() / 1000)
+      const blocksSinceStart = Math.floor(secondsSinceLatestBlock / 3)
+      startBlock = latestBlock.value - blocksSinceStart
+      endBlock = latestBlock.value
+      break
+    }
+    case '15days': {
+      // 计算15天前0点对应的区块
+      const secondsSinceLatestBlock = latestBlockTime - Math.floor(fifteenDaysAgoStart.getTime() / 1000)
+      const blocksSinceStart = Math.floor(secondsSinceLatestBlock / 3)
+      startBlock = latestBlock.value - blocksSinceStart
+      endBlock = latestBlock.value
+      break
+    }
+  }
+
+  // 确保起始区块不小于1
+  startBlock = Math.max(1, startBlock)
+  form.value.startBlock = startBlock
+  form.value.endBlock = endBlock
+
+  ElMessage.success(`已选择区块范围：${startBlock} - ${endBlock}`)
 }
 </script>
 
