@@ -96,16 +96,14 @@
             <el-radio :value="'from'">仅发送方</el-radio>
             <el-radio :value="'to'">仅接收方</el-radio>
           </el-radio-group>
-          <el-button 
-            @click="showAddressDialog" 
-            :disabled="form.addressFilterMode === 'none'"
-            style="margin-left: 15px"
-          >
-            编辑{{ form.addressFilterMode === 'whitelist' ? '白' : '黑' }}名单
-          </el-button>
-          <span v-if="form.addressFilterMode !== 'none'" class="address-count">
-            ({{ form.addressFilterMode === 'whitelist' ? form.whitelistAddresses.length : form.blacklistAddresses.length }} 个地址)
-          </span>
+          <template v-if="form.addressFilterMode !== 'none'">
+            <el-button @click="showAddressDialog">
+              编辑{{ form.addressFilterMode === 'whitelist' ? '白' : '黑' }}名单
+            </el-button>
+            <span class="address-count">
+              当前{{ form.addressFilterMode === 'whitelist' ? '白' : '黑' }}名单：{{ getAddressListCount(form.addressFilterMode) }} 个地址
+            </span>
+          </template>
         </el-form-item>
       </div>
 
@@ -380,13 +378,30 @@ const form = ref({
   noteFilter: '',
   addressFilterMode: 'none',
   addressFilterType: 'both',
-  whitelistAddresses: [],
-  blacklistAddresses: [],
   enableContractCheck: false,
   parallelScan: false,
   threadCount: 5,
   autoThrottle: true
 })
+
+const networkAddressLists = ref({
+  mainnet: {
+    whitelistAddresses: [],
+    blacklistAddresses: []
+  },
+  shasta: {
+    whitelistAddresses: [],
+    blacklistAddresses: []
+  },
+  nile: {
+    whitelistAddresses: [],
+    blacklistAddresses: []
+  }
+})
+
+const getCurrentNetworkAddressList = (type) => {
+  return networkAddressLists.value[form.value.network][`${type}Addresses`]
+}
 
 const loading = ref(false)
 const refreshing = ref(false)
@@ -530,9 +545,8 @@ const shouldFilterNote = (note) => {
 }
 
 const showAddressDialog = () => {
-  const addresses = form.value.addressFilterMode === 'whitelist' 
-    ? form.value.whitelistAddresses 
-    : form.value.blacklistAddresses
+  const listType = form.value.addressFilterMode === 'whitelist' ? 'whitelistAddresses' : 'blacklistAddresses'
+  const addresses = networkAddressLists.value[form.value.network][listType]
   addressInput.value = addresses.join('\n')
   addressDialogVisible.value = true
 }
@@ -543,11 +557,8 @@ const saveAddresses = () => {
     .map(addr => addr.trim())
     .filter(addr => addr && addr.length === 34)
   
-  if (form.value.addressFilterMode === 'whitelist') {
-    form.value.whitelistAddresses = [...new Set(addresses)]
-  } else {
-    form.value.blacklistAddresses = [...new Set(addresses)]
-  }
+  const listType = form.value.addressFilterMode === 'whitelist' ? 'whitelistAddresses' : 'blacklistAddresses'
+  networkAddressLists.value[form.value.network][listType] = [...new Set(addresses)]
   
   addressDialogVisible.value = false
   
@@ -559,10 +570,8 @@ const checkAddressMatch = (from, to) => {
   
   const fromAddr = (from || '').toLowerCase()
   const toAddr = (to || '').toLowerCase()
-  const addressList = (form.value.addressFilterMode === 'whitelist' 
-    ? form.value.whitelistAddresses 
-    : form.value.blacklistAddresses
-  ).map(addr => addr.toLowerCase())
+  const addressList = getCurrentNetworkAddressList(form.value.addressFilterMode === 'whitelist' ? 'whitelist' : 'blacklist')
+    .map(addr => addr.toLowerCase())
   
   let isInList = false
   switch (form.value.addressFilterType) {
@@ -818,6 +827,10 @@ const loadSettings = () => {
         endBlock: Number(settings.endBlock) || form.value.endBlock,
         threadCount: Number(settings.threadCount) || form.value.threadCount
       }
+      // 加载网络相关的黑白名单
+      if (settings.networkAddressLists) {
+        networkAddressLists.value = settings.networkAddressLists
+      }
     }
   } catch (e) {
     console.error('加载设置失败:', e)
@@ -839,8 +852,7 @@ const saveSettings = () => {
       noteFilter: form.value.noteFilter,
       addressFilterMode: form.value.addressFilterMode,
       addressFilterType: form.value.addressFilterType,
-      whitelistAddresses: form.value.whitelistAddresses,
-      blacklistAddresses: form.value.blacklistAddresses,
+      networkAddressLists: networkAddressLists.value,
       
       enableContractCheck: form.value.enableContractCheck,
       parallelScan: form.value.parallelScan,
@@ -863,8 +875,7 @@ watch(() => ({
   noteFilter: form.value.noteFilter,
   addressFilterMode: form.value.addressFilterMode,
   addressFilterType: form.value.addressFilterType,
-  whitelistAddresses: form.value.whitelistAddresses,
-  blacklistAddresses: form.value.blacklistAddresses,
+  networkAddressLists: networkAddressLists.value,
   enableContractCheck: form.value.enableContractCheck,
   parallelScan: form.value.parallelScan,
   threadCount: form.value.threadCount,
@@ -908,9 +919,10 @@ const getAddressUrl = (address) => {
 }
 
 const addToWhitelist = (address) => {
-  if (!form.value.whitelistAddresses.includes(address)) {
-    form.value.whitelistAddresses.push(address)
-    ElMessage.success('已添加到白名单')
+  const currentList = networkAddressLists.value[form.value.network].whitelistAddresses
+  if (!currentList.includes(address)) {
+    networkAddressLists.value[form.value.network].whitelistAddresses.push(address)
+    ElMessage.success(`已添加到${form.value.network}网络的白名单`)
     saveSettings()
   } else {
     ElMessage.info('该地址已在白名单中')
@@ -918,9 +930,10 @@ const addToWhitelist = (address) => {
 }
 
 const addToBlacklist = (address) => {
-  if (!form.value.blacklistAddresses.includes(address)) {
-    form.value.blacklistAddresses.push(address)
-    ElMessage.success('已添加到黑名单')
+  const currentList = networkAddressLists.value[form.value.network].blacklistAddresses
+  if (!currentList.includes(address)) {
+    networkAddressLists.value[form.value.network].blacklistAddresses.push(address)
+    ElMessage.success(`已添加到${form.value.network}网络的黑名单`)
     saveSettings()
   } else {
     ElMessage.info('该地址已在黑名单中')
@@ -1007,6 +1020,10 @@ const formatBlocksToTime = (blocks) => {
   if (minutes > 0) parts.push(`${minutes}分钟`)
   
   return parts.join('')
+}
+
+const getAddressListCount = (type) => {
+  return networkAddressLists.value[form.value.network][`${type}Addresses`].length
 }
 </script>
 
