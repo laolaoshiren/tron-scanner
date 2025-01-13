@@ -1160,6 +1160,19 @@ const stopAutoCollect = () => {
   max-width: 1800px;
   margin: 0 auto;
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.function-area {
+  background-color: #f5f7fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: 1400px;
 }
 
 .results {
@@ -1167,6 +1180,8 @@ const stopAutoCollect = () => {
   background-color: #fff;
   padding: 15px;
   border-radius: 4px;
+  width: 100%;
+  max-width: 1800px;
 }
 
 h1 {
@@ -1179,13 +1194,6 @@ h1 {
 h2 {
   margin-bottom: 15px;
   font-size: 16px;
-}
-
-.function-area {
-  background-color: #f5f7fa;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
 }
 
 .form-row {
