@@ -217,26 +217,33 @@
           </el-descriptions-item>
         </el-descriptions>
       </div>
-      <el-table :data="transactions" style="width: 100%" class="custom-table">
+      <el-table 
+        :data="transactions" 
+        style="width: 100%" 
+        class="custom-table" 
+        border
+        :resizable="false"
+        :table-layout="fixed"
+      >
         <el-table-column prop="block" label="区块" width="100">
           <template #default="{ row }">
             <span class="fixed-content">{{ row.block }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="timestamp" label="时间" width="160">
+        <el-table-column prop="timestamp" label="时间" width="140">
           <template #default="{ row }">
             <span class="fixed-content">{{ formatTime(row.timestamp) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="hash" label="交易哈希" width="180">
+        <el-table-column prop="hash" label="交易哈希" width="160">
           <template #default="{ row }">
             <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
           </template>
         </el-table-column>
-        <el-table-column prop="from" label="发送方" width="300">
+        <el-table-column prop="from" label="发送方" width="280">
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 2px">
-              <span style="min-width: 140px; font-family: monospace;">
+              <span style="min-width: 130px; font-family: monospace;">
                 <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
                   {{ formatAddress(row.from, row.fromIsContract) }}
                 </a>
@@ -249,10 +256,10 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="to" label="接收方" width="300">
+        <el-table-column prop="to" label="接收方" width="280">
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 2px">
-              <span style="min-width: 140px; font-family: monospace;">
+              <span style="min-width: 130px; font-family: monospace;">
                 <template v-if="row.to === '(合约创建)'">
                   <span class="contract-address">{{ row.to }}</span>
                 </template>
@@ -270,12 +277,12 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="amount" label="金额(TRX)" width="100">
+        <el-table-column prop="amount" label="金额" width="100">
           <template #default="{ row }">
             <span class="fixed-content">{{ row.amount }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="note" label="备注" min-width="200">
+        <el-table-column prop="note" label="备注" min-width="500">
           <template #default="{ row }">
             <div class="note-content">{{ row.note }}</div>
           </template>
@@ -332,6 +339,7 @@ const latestBlock = ref(null)
 const scanning = ref(false)
 const scanProgress = ref(0)
 const currentScanningBlock = ref(0)
+const processedBlockCount = ref(0)
 const addressDialogVisible = ref(false)
 const addressInput = ref('')
 const contractCache = ref(new Map())
@@ -608,6 +616,7 @@ const scanTransactions = async () => {
   scanning.value = true
   transactions.value = []
   scanProgress.value = 0
+  processedBlockCount.value = 0
   currentScanningBlock.value = form.value.startBlock
   successBlocks.value = 0
   failedBlocks.value = 0
@@ -635,7 +644,7 @@ const scanTransactions = async () => {
         chunks.push(blockNumbers.slice(i, i + chunkSize))
       }
 
-      const tasks = chunks.map(async (chunk, index) => {
+      const tasks = chunks.map(async (chunk) => {
         for (let i = 0; i < chunk.length; i++) {
           if (!scanning.value) break
 
@@ -679,8 +688,8 @@ const scanTransactions = async () => {
             }
           }
 
-          const processedCount = chunks.slice(0, index).reduce((sum, c) => sum + c.length, 0) + i + 1
-          scanProgress.value = Math.floor(processedCount / totalBlocks * 100)
+          processedBlockCount.value++
+          scanProgress.value = Math.floor(processedBlockCount.value / totalBlocks * 100)
         }
       })
 
@@ -712,7 +721,8 @@ const scanTransactions = async () => {
           console.error(`扫描区块 ${blockNum} 失败:`, error)
         }
 
-        scanProgress.value = Math.floor((i + 1) / totalBlocks * 100)
+        processedBlockCount.value++
+        scanProgress.value = Math.floor(processedBlockCount.value / totalBlocks * 100)
       }
     }
     
@@ -733,6 +743,7 @@ const scanTransactions = async () => {
     scanning.value = false
     scanProgress.value = 0
     currentScanningBlock.value = 0
+    processedBlockCount.value = 0
   }
 }
 
@@ -915,7 +926,7 @@ const formatBlocksToTime = (blocks) => {
 
 <style scoped>
 .container {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -1131,5 +1142,82 @@ h2 {
 
 :deep(.el-button-group) {
   margin-left: -2px;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: #f5f7fa;
+  color: #606266;
+  font-weight: bold;
+  padding: 8px;
+  white-space: nowrap;
+}
+
+:deep(.el-table__header-wrapper) {
+  background-color: #f5f7fa;
+}
+
+.note-content {
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+:deep(.el-table__column-resize-proxy) {
+  display: none;
+}
+
+:deep(.el-table) {
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+:deep(.el-table__cell) {
+  border-right: 1px solid #EBEEF5;
+}
+
+:deep(.el-table__header th.el-table__cell) {
+  border-right: 1px solid #EBEEF5;
+}
+
+:deep(.el-table__column-resize-proxy) {
+  display: none !important;
+}
+
+:deep(.el-table__column-resize-handle) {
+  display: none !important;
+}
+
+:deep(.el-table) {
+  --el-table-border-color: #EBEEF5;
+  table-layout: fixed !important;
+}
+
+:deep(.el-table__cell) {
+  user-select: none;
+}
+
+:deep(.el-table__column-resize-handle),
+:deep(.el-table__column-resize-proxy) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+}
+
+:deep(.el-table__header) {
+  user-select: none;
+}
+
+:deep(.el-table__header th) {
+  position: relative !important;
+}
+
+:deep(.el-table__header th::after) {
+  display: none !important;
+}
+
+:deep(.el-table--border th.el-table__cell.is-leaf) {
+  border-right: 1px solid var(--el-table-border-color);
 }
 </style> 
