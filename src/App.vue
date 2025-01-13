@@ -247,40 +247,45 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="from" label="发送方" width="240" align="center">
+        <el-table-column prop="from" label="发送方" width="320" align="center">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 2px">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px">
               <span style="min-width: 120px; font-family: monospace;">
-                <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
-                  {{ formatAddress(row.from, row.fromIsContract) }}
-                </a>
+                <template v-if="row.from === '(合约创建)'">
+                  <span class="contract-creation">{{ row.from }}</span>
+                </template>
+                <template v-else>
+                  <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
+                    <template v-if="row.fromIsContract">[合]</template>{{ row.from.slice(0, 8) }}...{{ row.from.slice(-8) }}
+                  </a>
+                </template>
               </span>
-              <el-button-group size="small" style="transform: scale(0.9);">
-                <el-button type="primary" @click="addToWhitelist(row.from)" title="添加到白名单">白</el-button>
-                <el-button type="danger" @click="addToBlacklist(row.from)" title="添加到黑名单">黑</el-button>
-                <el-button type="info" @click="copyAddress(row.from)" title="复制地址">复</el-button>
+              <el-button-group>
+                <el-button type="primary" size="small" @click="addToWhitelist(row.from)" :disabled="row.from === '(合约创建)'" title="添加到白名单">白</el-button>
+                <el-button type="danger" size="small" @click="addToBlacklist(row.from)" :disabled="row.from === '(合约创建)'" title="添加到黑名单">黑</el-button>
+                <el-button type="info" size="small" @click="copyAddress(row.from)" :disabled="row.from === '(合约创建)'" title="复制地址">复</el-button>
               </el-button-group>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column prop="to" label="接收方" width="240" align="center">
+        <el-table-column prop="to" label="接收方" width="320" align="center">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 2px">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px">
               <span style="min-width: 120px; font-family: monospace;">
                 <template v-if="row.to === '(合约创建)'">
-                  <span class="contract-address">{{ row.to }}</span>
+                  <span class="contract-creation">{{ row.to }}</span>
                 </template>
                 <template v-else>
                   <a :href="getAddressUrl(row.to)" target="_blank" class="address-link">
-                    {{ formatAddress(row.to, row.toIsContract) }}
+                    <template v-if="row.toIsContract">[合]</template>{{ row.to.slice(0, 8) }}...{{ row.to.slice(-8) }}
                   </a>
                 </template>
               </span>
-              <el-button-group size="small" style="transform: scale(0.9);">
-                <el-button type="primary" @click="addToWhitelist(row.to)" title="添加到白名单" :disabled="row.to === '(合约创建)'">白</el-button>
-                <el-button type="danger" @click="addToBlacklist(row.to)" title="添加到黑名单" :disabled="row.to === '(合约创建)'">黑</el-button>
-                <el-button type="info" @click="copyAddress(row.to)" title="复制地址" :disabled="row.to === '(合约创建)'">复</el-button>
+              <el-button-group>
+                <el-button type="primary" size="small" @click="addToWhitelist(row.to)" :disabled="row.to === '(合约创建)'" title="添加到白名单">白</el-button>
+                <el-button type="danger" size="small" @click="addToBlacklist(row.to)" :disabled="row.to === '(合约创建)'" title="添加到黑名单">黑</el-button>
+                <el-button type="info" size="small" @click="copyAddress(row.to)" :disabled="row.to === '(合约创建)'" title="复制地址">复</el-button>
               </el-button-group>
             </div>
           </template>
