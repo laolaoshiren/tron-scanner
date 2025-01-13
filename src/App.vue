@@ -183,42 +183,45 @@
       </template>
     </el-dialog>
 
-    <!-- 扫描进度 -->
-    <div v-if="loading" class="scan-progress">
-      <div class="current-block">
-        正在扫描区块: {{ currentScanningBlock }}
-      </div>
-      <el-progress 
-        :percentage="scanProgress" 
-        :format="progressFormat"
-        :stroke-width="20"
-        status="success"
-      />
-    </div>
-
-    <!-- 扫描结果 -->
-    <div v-if="loading || transactions.length > 0" class="results">
+    <!-- 扫描结果和进度 -->
+    <div v-if="loading || transactions.length > 0 || successBlocks > 0" class="results">
       <div class="results-header">
-        <h2 style="display: inline-block; margin-right: 20px; margin-bottom: 0;">扫描结果</h2>
-        <div class="scan-stats" style="display: inline-block;">
-          <el-descriptions :column="4" border size="small">
-            <el-descriptions-item label="扫描区块数">
-              {{ form.endBlock - form.startBlock + 1 }}
-            </el-descriptions-item>
-            <el-descriptions-item label="成功区块数">
-              {{ successBlocks }}
-            </el-descriptions-item>
-            <el-descriptions-item label="失败区块数">
-              {{ failedBlocks }}
-            </el-descriptions-item>
-            <el-descriptions-item label="找到交易数">
-              {{ transactions.length }}
-            </el-descriptions-item>
-          </el-descriptions>
+        <div class="results-left">
+          <h2 class="results-title">扫描结果</h2>
+          <div class="results-content">
+            <el-descriptions :column="4" border size="small" class="scan-stats">
+              <el-descriptions-item label="扫描区块数">
+                {{ form.endBlock - form.startBlock + 1 }}
+              </el-descriptions-item>
+              <el-descriptions-item label="成功区块数">
+                {{ successBlocks }}
+              </el-descriptions-item>
+              <el-descriptions-item label="失败区块数">
+                {{ failedBlocks }}
+              </el-descriptions-item>
+              <el-descriptions-item label="找到交易数">
+                {{ transactions.length }}
+              </el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </div>
+        <div class="results-right">
+          <div v-if="loading" class="scan-progress">
+            <div class="current-block">
+              正在扫描区块: {{ currentScanningBlock }}
+            </div>
+            <el-progress 
+              :percentage="scanProgress" 
+              :format="progressFormat"
+              :stroke-width="20"
+              status="success"
+            />
+          </div>
         </div>
       </div>
 
       <el-table 
+        v-if="transactions.length > 0"
         :data="transactions" 
         style="width: 100%; margin-top: 15px;" 
         class="custom-table" 
@@ -1082,33 +1085,58 @@ h2 {
   color: #666;
 }
 
-.scan-progress {
-  margin: 20px 0;
-  padding: 10px;
-  background-color: #fff;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+.results-right {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  padding-left: 20px;
+  width: 100%;
 }
 
-.current-block {
-  margin-bottom: 10px;
-  padding: 0 4px;
-  font-size: 14px;
-  color: #606266;
-  font-family: monospace;
+.scan-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+:deep(.scan-progress .el-progress) {
+  width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.scan-progress .el-progress-bar) {
+  flex: 1;
+  margin-right: 10px;
+}
+
+:deep(.scan-progress .el-progress__text) {
+  font-size: 13px !important;
+  min-width: 50px !important;
+  margin-left: 0 !important;
+  padding-left: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 :deep(.scan-progress .el-progress-bar__outer) {
+  height: 16px !important;
   background-color: #e9ecef;
+  width: 100%;
 }
 
 :deep(.scan-progress .el-progress-bar__inner) {
   transition: width 0.3s ease;
 }
 
-:deep(.scan-progress .el-progress__text) {
-  font-size: 14px !important;
-  min-width: 200px !important;
+.current-block {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #606266;
+  font-family: monospace;
+  white-space: nowrap;
 }
 
 .address-dialog-content {
@@ -1295,23 +1323,53 @@ h2 {
 
 .results-header {
   display: flex;
-  align-items: center;
   background-color: #fff;
   padding: 15px;
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+  min-height: 80px;
+}
+
+.results-left {
+  flex: 3;
+  display: flex;
+  align-items: center;
+  padding-right: 20px;
+  border-right: 1px solid #EBEEF5;
+}
+
+.results-right {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  padding-left: 20px;
+  width: 100%;
 }
 
 .scan-stats {
-  flex: 1;
   margin: 0;
+  width: 100%;
 }
 
 :deep(.scan-stats .el-descriptions) {
-  margin: 0;
+  width: 100%;
 }
 
-:deep(.scan-stats .el-descriptions__cell) {
-  padding: 8px 12px;
+:deep(.scan-stats .el-descriptions__body) {
+  width: 100%;
+}
+
+.results-title {
+  white-space: nowrap;
+  margin: 0;
+  margin-right: 20px;
+  font-size: 16px;
+}
+
+.results-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
 }
 </style> 
