@@ -136,13 +136,25 @@
       <!-- 第七行：操作按钮 -->
       <div class="form-row">
         <el-form-item>
-          <el-button type="primary" @click="scanTransactions" :loading="loading" v-if="!loading">
+          <el-button 
+            type="primary" 
+            :loading="loading" 
+            @click="scanBlocks"
+          >
             开始扫描
           </el-button>
-          <el-button type="danger" @click="stopScan" v-if="loading">
+          <el-button 
+            type="danger" 
+            @click="stopScan" 
+            :disabled="!loading"
+          >
             停止扫描
           </el-button>
-          <el-button type="success" @click="refreshLatestBlock" :loading="refreshing">
+          <el-button 
+            type="success" 
+            @click="refreshLatestBlock" 
+            :loading="refreshing"
+          >
             刷新最新区块
           </el-button>
           <div v-if="latestBlock" class="latest-block">
@@ -197,7 +209,13 @@
                 {{ successBlocks }}
               </el-descriptions-item>
               <el-descriptions-item label="失败区块数">
-                {{ failedBlocks }}
+                <el-tooltip
+                  effect="dark"
+                  content="未成功数/累计失败数"
+                  placement="top"
+                >
+                  <span style="cursor: help">{{ failedBlocks }}/{{ totalFailedBlocks }}</span>
+                </el-tooltip>
               </el-descriptions-item>
               <el-descriptions-item label="找到交易数">
                 {{ transactions.length }}
@@ -213,8 +231,9 @@
             <el-progress 
               :percentage="scanProgress" 
               :format="progressFormat"
-              :stroke-width="20"
+              :stroke-width="18"
               status="success"
+              style="width: 100%"
             />
           </div>
         </div>
@@ -382,6 +401,9 @@ const addressInput = ref('')
 const contractCache = ref(new Map())
 const successBlocks = ref(0)
 const failedBlocks = ref(0)
+const totalFailedBlocks = ref(0)
+const failedBlockSet = ref(new Set())
+const maxRetries = 10
 const isInitialLoad = ref(true)
 
 const rateLimiter = {
@@ -496,8 +518,7 @@ const formatTime = (timestamp) => {
 }
 
 const progressFormat = (percentage) => {
-  const currentBlock = form.value.startBlock + Math.floor((form.value.endBlock - form.value.startBlock) * percentage / 100)
-  return `已扫描至区块 ${currentBlock} (${percentage}%)`
+  return `已成功扫描 ${successBlocks.value}/${form.value.endBlock - form.value.startBlock + 1} 个区块`
 }
 
 const shouldFilterNote = (note) => {
@@ -640,141 +661,74 @@ const processTransaction = async (tx, blockNum, contract) => {
   return null
 }
 
-const scanTransactions = async () => {
-  if (!form.value.startBlock || !form.value.endBlock) {
-    ElMessage.warning('请输入区块范围')
+const scanBlocks = async () => {
+  if (loading.value) {
+    ElMessage.warning('扫描正在进行中')
     return
   }
 
-  if (form.value.endBlock < form.value.startBlock) {
-    ElMessage.warning('结束区块不能小于起始区块')
-    return
-  }
-
-  if (form.value.endBlock - form.value.startBlock > 1000000) {
-    ElMessage.warning('为了保证性能，每次最多扫描100万个区块')
-    return
-  }
-
-  if (form.value.tokenTypes.length === 0) {
-    ElMessage.warning('请至少选择一种代币类型')
-    return
-  }
-
-  loading.value = true
-  scanning.value = true
-  transactions.value = []
-  scanProgress.value = 0
-  processedBlockCount.value = 0
-  currentScanningBlock.value = form.value.startBlock
+  // 重置计数器
   successBlocks.value = 0
   failedBlocks.value = 0
-  const tronWeb = getTronWeb()
-
+  totalFailedBlocks.value = 0
+  failedBlockSet.value.clear()
+  transactions.value = []
+  scanProgress.value = 0
+  
   try {
-    const totalBlocks = form.value.endBlock - form.value.startBlock + 1
-    let blockNumbers = []
+    loading.value = true
+    scanning.value = true
     
-    if (form.value.scanOrder === 'asc') {
-      for (let i = form.value.startBlock; i <= form.value.endBlock; i++) {
-        blockNumbers.push(i)
-      }
-    } else {
-      for (let i = form.value.endBlock; i >= form.value.startBlock; i--) {
-        blockNumbers.push(i)
-      }
-    }
-
+    const tronWeb = getTronWeb()
+    const startBlock = Number(form.value.startBlock)
+    const endBlock = Number(form.value.endBlock)
+    const totalBlocks = endBlock - startBlock + 1
+    
+    // 生成区块号数组
+    let blockNumbers = Array.from(
+      { length: totalBlocks }, 
+      (_, i) => form.value.scanOrder === 'asc' ? startBlock + i : endBlock - i
+    )
+    
+    // 并行扫描逻辑
     if (form.value.parallelScan) {
-      const chunkSize = Math.ceil(blockNumbers.length / form.value.threadCount)
+      const threads = Math.min(form.value.threadCount, blockNumbers.length)
       const chunks = []
+      const chunkSize = Math.ceil(blockNumbers.length / threads)
       
       for (let i = 0; i < blockNumbers.length; i += chunkSize) {
         chunks.push(blockNumbers.slice(i, i + chunkSize))
       }
-
-      const tasks = chunks.map(async (chunk) => {
-        for (let i = 0; i < chunk.length; i++) {
-          if (!scanning.value) break
-
-          const blockNum = chunk[i]
-          currentScanningBlock.value = blockNum
-
-          try {
-            if (form.value.autoThrottle) {
-              await rateLimiter.wait()
-            }
-
-            const block = await tronWeb.trx.getBlock(blockNum)
-            
-            if (form.value.autoThrottle) {
-              rateLimiter.success()
-            }
-
-            if (block && block.transactions) {
-              successBlocks.value++
-              for (const tx of block.transactions) {
-                if (!scanning.value) break
-                
-                if (tx.raw_data && tx.raw_data.contract) {
-                  for (const contract of tx.raw_data.contract) {
-                    const result = await processTransaction(tx, blockNum, contract)
-                    if (result) {
-                      transactions.value.push(result)
-                    }
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            failedBlocks.value++
-            console.error(`扫描区块 ${blockNum} 失败:`, error)
-            if (form.value.autoThrottle) {
-              rateLimiter.error()
-              if (error.message.includes('rate limit') || error.message.includes('too many requests')) {
-                await new Promise(resolve => setTimeout(resolve, 5000))
-              }
-            }
-          }
-
-          processedBlockCount.value++
-          scanProgress.value = Math.floor(processedBlockCount.value / totalBlocks * 100)
-        }
-      })
-
-      await Promise.all(tasks)
+      
+      await Promise.all(chunks.map(chunk => processBlockChunk(chunk, tronWeb)))
     } else {
-      for (let i = 0; i < blockNumbers.length; i++) {
-        if (!scanning.value) break
-
-        const blockNum = blockNumbers[i]
-        currentScanningBlock.value = blockNum
-        
-        try {
-          const block = await tronWeb.trx.getBlock(blockNum)
-          if (block && block.transactions) {
-            successBlocks.value++
-            for (const tx of block.transactions) {
-              if (tx.raw_data && tx.raw_data.contract) {
-                for (const contract of tx.raw_data.contract) {
-                  const result = await processTransaction(tx, blockNum, contract)
-                  if (result) {
-                    transactions.value.push(result)
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          failedBlocks.value++
-          console.error(`扫描区块 ${blockNum} 失败:`, error)
-        }
-
-        processedBlockCount.value++
-        scanProgress.value = Math.floor(processedBlockCount.value / totalBlocks * 100)
-      }
+      await processBlockChunk(blockNumbers, tronWeb)
     }
     
+    // 处理失败的区块
+    while (failedBlockSet.value.size > 0 && scanning.value) {
+      const failedBlocks = Array.from(failedBlockSet.value)
+      failedBlockSet.value.clear() // 清空集合，准备记录新的失败
+      
+      // 增加延迟，避免频繁请求
+      await new Promise(resolve => setTimeout(resolve, rateLimiter.currentInterval * 2))
+      
+      // 重试失败的区块
+      if (form.value.parallelScan) {
+        const threads = Math.min(form.value.threadCount, failedBlocks.length)
+        const chunks = []
+        const chunkSize = Math.ceil(failedBlocks.length / threads)
+        
+        for (let i = 0; i < failedBlocks.length; i += chunkSize) {
+          chunks.push(failedBlocks.slice(i, i + chunkSize))
+        }
+        
+        await Promise.all(chunks.map(chunk => processBlockChunk(chunk, tronWeb, true)))
+      } else {
+        await processBlockChunk(failedBlocks, tronWeb, true)
+      }
+    }
+
     if (!scanning.value) {
       return
     }
@@ -793,6 +747,62 @@ const scanTransactions = async () => {
     scanProgress.value = 0
     currentScanningBlock.value = 0
     processedBlockCount.value = 0
+  }
+}
+
+const processBlockChunk = async (blockNumbers, tronWeb, isRetry = false) => {
+  const totalBlocks = form.value.endBlock - form.value.startBlock + 1
+  
+  for (let i = 0; i < blockNumbers.length; i++) {
+    if (!scanning.value) break
+    
+    const blockNum = blockNumbers[i]
+    currentScanningBlock.value = blockNum
+    
+    try {
+      if (form.value.autoThrottle) {
+        await rateLimiter.wait()
+      }
+      
+      const block = await tronWeb.trx.getBlock(blockNum)
+      if (block && block.transactions) {
+        // 如果之前失败过，现在成功了，从失败集合中移除
+        if (failedBlockSet.value.has(blockNum)) {
+          failedBlockSet.value.delete(blockNum)
+          failedBlocks.value = failedBlockSet.value.size
+        }
+        successBlocks.value++
+        // 更新进度条为成功区块数的比例
+        scanProgress.value = Math.floor(successBlocks.value / totalBlocks * 100)
+        
+        for (const tx of block.transactions) {
+          if (tx.raw_data && tx.raw_data.contract) {
+            for (const contract of tx.raw_data.contract) {
+              const result = await processTransaction(tx, blockNum, contract)
+              if (result) {
+                transactions.value.push(result)
+              }
+            }
+          }
+        }
+        rateLimiter.success()
+      }
+    } catch (error) {
+      console.error(`扫描区块 ${blockNum} 失败:`, error)
+      rateLimiter.error()
+      
+      // 如果是首次失败，增加总失败数
+      if (!failedBlockSet.value.has(blockNum) && !isRetry) {
+        totalFailedBlocks.value++
+      }
+      // 添加到当前失败集合
+      failedBlockSet.value.add(blockNum)
+      failedBlocks.value = failedBlockSet.value.size
+      
+      if (form.value.autoThrottle) {
+        await new Promise(resolve => setTimeout(resolve, rateLimiter.currentInterval))
+      }
+    }
   }
 }
 
@@ -1009,6 +1019,9 @@ const formatBlocksToTime = (blocks) => {
 
 .results {
   margin-top: 20px;
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 4px;
 }
 
 h1 {
@@ -1148,11 +1161,9 @@ h2 {
 }
 
 .current-block {
-  margin-bottom: 8px;
-  font-size: 13px;
+  margin-bottom: 10px;
+  font-size: 14px;
   color: #606266;
-  font-family: monospace;
-  white-space: nowrap;
 }
 
 .address-dialog-content {
