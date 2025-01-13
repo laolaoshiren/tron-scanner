@@ -75,19 +75,55 @@
 
       <el-form-item label="钱包筛选">
         <div style="display: flex; gap: 10px; align-items: center">
-          <el-input
-            v-model="form.addressFilter"
-            placeholder="输入钱包地址（支持多个地址，用空格分隔）"
-            style="width: 400px"
-            clearable
-          />
-          <el-radio-group v-model="form.addressFilterType" size="small">
+          <el-radio-group v-model="form.addressFilterMode" size="small">
+            <el-radio :value="'none'">不启用</el-radio>
+            <el-radio :value="'whitelist'">白名单</el-radio>
+            <el-radio :value="'blacklist'">黑名单</el-radio>
+          </el-radio-group>
+          <el-radio-group v-model="form.addressFilterType" size="small" :disabled="form.addressFilterMode === 'none'">
             <el-radio :value="'both'">发送方或接收方</el-radio>
             <el-radio :value="'from'">仅发送方</el-radio>
             <el-radio :value="'to'">仅接收方</el-radio>
           </el-radio-group>
+          <el-button 
+            @click="showAddressDialog" 
+            size="small" 
+            :disabled="form.addressFilterMode === 'none'"
+          >
+            编辑{{ form.addressFilterMode === 'whitelist' ? '白' : '黑' }}名单
+          </el-button>
+          <span v-if="form.addressFilterMode !== 'none'" class="address-count">
+            ({{ form.addressFilterMode === 'whitelist' ? form.whitelistAddresses.length : form.blacklistAddresses.length }} 个地址)
+          </span>
         </div>
       </el-form-item>
+
+      <!-- 添加地址编辑对话框 -->
+      <el-dialog
+        v-model="addressDialogVisible"
+        :title="form.addressFilterMode === 'whitelist' ? '编辑白名单' : '编辑黑名单'"
+        width="600px"
+      >
+        <div class="address-dialog-content">
+          <div class="address-tips">
+            请输入钱包地址，每行一个：
+          </div>
+          <el-input
+            v-model="addressInput"
+            type="textarea"
+            :rows="15"
+            placeholder="输入钱包地址，每行一个"
+          />
+        </div>
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="addressDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="saveAddresses">
+              确认
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
 
       <el-form-item>
         <el-button type="primary" @click="scanTransactions" :loading="loading" v-if="!loading">
@@ -196,8 +232,10 @@ const form = ref({
   scanOrder: 'desc',
   tokenTypes: ['TRX'],
   noteFilter: '',
-  addressFilter: '',
-  addressFilterType: 'both'  // 'both', 'from', 'to'
+  addressFilterMode: 'none',  // 'none', 'whitelist', 'blacklist'
+  addressFilterType: 'both',  // 'both', 'from', 'to'
+  whitelistAddresses: [],  // 白名单地址列表
+  blacklistAddresses: []   // 黑名单地址列表
 })
 
 const loading = ref(false)
@@ -207,6 +245,8 @@ const latestBlock = ref(null)
 const scanning = ref(false)
 const scanProgress = ref(0)
 const currentScanningBlock = ref(0)
+const addressDialogVisible = ref(false)
+const addressInput = ref('')
 
 // 获取最新区块号
 const getLatestBlock = async () => {
@@ -310,24 +350,60 @@ const shouldFilterNote = (note) => {
   return keywords.some(keyword => noteText.includes(keyword))
 }
 
+// 显示地址编辑对话框
+const showAddressDialog = () => {
+  const addresses = form.value.addressFilterMode === 'whitelist' 
+    ? form.value.whitelistAddresses 
+    : form.value.blacklistAddresses
+  addressInput.value = addresses.join('\n')
+  addressDialogVisible.value = true
+}
+
+// 保存地址列表
+const saveAddresses = () => {
+  const addresses = addressInput.value
+    .split('\n')
+    .map(addr => addr.trim())
+    .filter(addr => addr && addr.length === 34)  // Tron 地址长度为 34
+  
+  if (form.value.addressFilterMode === 'whitelist') {
+    form.value.whitelistAddresses = [...new Set(addresses)]  // 去重
+  } else {
+    form.value.blacklistAddresses = [...new Set(addresses)]  // 去重
+  }
+  
+  addressDialogVisible.value = false
+  
+  ElMessage.success(`已保存 ${addresses.length} 个有效${form.value.addressFilterMode === 'whitelist' ? '白名单' : '黑名单'}地址`)
+}
+
 // 检查地址是否匹配筛选条件
 const checkAddressMatch = (from, to) => {
-  if (!form.value.addressFilter) return true
-  const addresses = form.value.addressFilter.toLowerCase().split(/\s+/).filter(a => a)
-  if (addresses.length === 0) return true
-
+  if (form.value.addressFilterMode === 'none') return true
+  
   const fromAddr = from.toLowerCase()
   const toAddr = to.toLowerCase()
-
+  const addressList = (form.value.addressFilterMode === 'whitelist' 
+    ? form.value.whitelistAddresses 
+    : form.value.blacklistAddresses
+  ).map(addr => addr.toLowerCase())
+  
+  let isInList = false
   switch (form.value.addressFilterType) {
     case 'from':
-      return addresses.includes(fromAddr)
+      isInList = addressList.includes(fromAddr)
+      break
     case 'to':
-      return addresses.includes(toAddr)
+      isInList = addressList.includes(toAddr)
+      break
     case 'both':
     default:
-      return addresses.includes(fromAddr) || addresses.includes(toAddr)
+      isInList = addressList.includes(fromAddr) || addressList.includes(toAddr)
+      break
   }
+  
+  // 白名单模式：在列表中的通过；黑名单模式：不在列表中的通过
+  return form.value.addressFilterMode === 'whitelist' ? isInList : !isInList
 }
 
 const scanTransactions = async () => {
@@ -501,8 +577,10 @@ const saveSettings = () => {
       scanOrder: form.value.scanOrder,
       tokenTypes: form.value.tokenTypes,
       noteFilter: form.value.noteFilter,
-      addressFilter: form.value.addressFilter,
-      addressFilterType: form.value.addressFilterType
+      addressFilterMode: form.value.addressFilterMode,
+      addressFilterType: form.value.addressFilterType,
+      whitelistAddresses: form.value.whitelistAddresses,
+      blacklistAddresses: form.value.blacklistAddresses
     }))
   } catch (e) {
     console.error('保存设置失败:', e)
@@ -701,5 +779,19 @@ h2 {
 :deep(.scan-progress .el-progress__text) {
   font-size: 14px !important;
   min-width: 200px !important;
+}
+
+.address-dialog-content {
+  padding: 0 20px;
+}
+
+.address-tips {
+  margin-bottom: 10px;
+  color: #666;
+}
+
+.address-count {
+  color: #666;
+  font-size: 13px;
 }
 </style> 
