@@ -963,7 +963,12 @@ const copyAddress = async (address) => {
   }
 }
 
-const selectTimeRange = (range) => {
+const selectTimeRange = async (range) => {
+  // 如果是今日范围，先刷新最新区块
+  if (range === 'today') {
+    await refreshLatestBlock()
+  }
+  
   if (!latestBlock.value) {
     ElMessage.warning('请等待获取最新区块号')
     return
