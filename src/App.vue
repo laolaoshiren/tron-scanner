@@ -104,6 +104,12 @@
         </div>
       </el-form-item>
 
+      <el-form-item label="高级选项">
+        <el-checkbox v-model="form.enableContractCheck">
+          检测并标注智能合约地址（会降低扫描速度）
+        </el-checkbox>
+      </el-form-item>
+
       <!-- 添加地址编辑对话框 -->
       <el-dialog
         v-model="addressDialogVisible"
@@ -183,10 +189,14 @@
             <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
           </template>
         </el-table-column>
-        <el-table-column prop="from" label="发送方" width="280">
+        <el-table-column prop="from" label="发送方" width="320">
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 4px">
-              <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">{{ formatAddress(row.from) }}</a>
+              <span style="min-width: 150px; font-family: monospace;">
+                <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
+                  {{ formatAddress(row.from, row.fromIsContract) }}
+                </a>
+              </span>
               <el-button-group size="small">
                 <el-button type="primary" @click="addToWhitelist(row.from)" title="添加到白名单">白</el-button>
                 <el-button type="danger" @click="addToBlacklist(row.from)" title="添加到黑名单">黑</el-button>
@@ -195,15 +205,17 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="to" label="接收方" width="280">
+        <el-table-column prop="to" label="接收方" width="320">
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 4px">
-              <span style="min-width: 120px">
+              <span style="min-width: 150px; font-family: monospace;">
                 <template v-if="row.to === '(合约创建)'">
                   <span class="contract-address">{{ row.to }}</span>
                 </template>
                 <template v-else>
-                  <a :href="getAddressUrl(row.to)" target="_blank" class="address-link">{{ formatAddress(row.to) }}</a>
+                  <a :href="getAddressUrl(row.to)" target="_blank" class="address-link">
+                    {{ formatAddress(row.to, row.toIsContract) }}
+                  </a>
                 </template>
               </span>
               <el-button-group size="small">
@@ -262,7 +274,8 @@ const form = ref({
   addressFilterMode: 'none',  // 'none', 'whitelist', 'blacklist'
   addressFilterType: 'both',  // 'both', 'from', 'to'
   whitelistAddresses: [],  // 白名单地址列表
-  blacklistAddresses: []   // 黑名单地址列表
+  blacklistAddresses: [],  // 黑名单地址列表
+  enableContractCheck: false  // 是否启用合约检测
 })
 
 const loading = ref(false)
@@ -274,6 +287,7 @@ const scanProgress = ref(0)
 const currentScanningBlock = ref(0)
 const addressDialogVisible = ref(false)
 const addressInput = ref('')
+const contractCache = ref(new Map())  // 缓存合约检查结果
 
 // 获取最新区块号
 const getLatestBlock = async () => {
@@ -342,9 +356,9 @@ const stopScan = () => {
 }
 
 // 格式化地址显示
-const formatAddress = (address) => {
+const formatAddress = (address, isContract) => {
   if (!address || address === '(创建合约)' || address === '(合约创建)') return address
-  return `${address.slice(0, 6)}...${address.slice(-6)}`
+  return `${isContract ? '[合] ' : ''}${address.slice(0, 6)}...${address.slice(-6)}`
 }
 
 // 格式化时间显示
@@ -430,6 +444,80 @@ const checkAddressMatch = (from, to) => {
   }
   
   return form.value.addressFilterMode === 'whitelist' ? isInList : !isInList
+}
+
+// 检查地址是否为智能合约
+const checkIsContract = async (address) => {
+  if (!address || address === '(创建合约)' || address === '(合约创建)') return false
+  
+  // 先检查缓存
+  if (contractCache.value.has(address)) {
+    return contractCache.value.get(address)
+  }
+
+  try {
+    const tronWeb = getTronWeb()
+    const code = await tronWeb.trx.getContract(address)
+    const isContract = !!code
+    // 缓存结果
+    contractCache.value.set(address, isContract)
+    return isContract
+  } catch (e) {
+    console.warn('检查合约状态失败:', e)
+    return false
+  }
+}
+
+// 修改交易处理逻辑，根据开关决定是否检测合约
+const processTransaction = async (tx, blockNum, contract) => {
+  try {
+    if (tx.raw_data.data) {
+      const tronWeb = getTronWeb()
+      const note = tronWeb.toUtf8(tx.raw_data.data)
+      if (note && !shouldFilterNote(note)) {
+        const { value } = contract.parameter
+        const fromAddress = tronWeb.address.fromHex(value.owner_address || value.from || value.from_address)
+        let toAddress = ''
+        
+        try {
+          toAddress = tronWeb.address.fromHex(value.to_address || value.to)
+        } catch (e) {
+          console.warn('无法解析接收方地址:', e)
+        }
+        
+        if (!fromAddress && !toAddress) return null
+
+        let isFromContract = false
+        let isToContract = false
+
+        // 只在启用合约检测时执行检查
+        if (form.value.enableContractCheck) {
+          [isFromContract, isToContract] = await Promise.all([
+            checkIsContract(fromAddress),
+            checkIsContract(toAddress)
+          ])
+        }
+
+        if (checkAddressMatch(fromAddress || '', toAddress || '')) {
+          return {
+            block: blockNum,
+            timestamp: tx.raw_data.timestamp,
+            hash: tx.txID,
+            from: fromAddress || '(创建合约)',
+            fromIsContract: isFromContract,
+            to: toAddress || '(合约创建)',
+            toIsContract: isToContract,
+            amount: value.amount ? value.amount / 1000000 : '转账',
+            type: contract.type,
+            note
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('处理交易失败:', e)
+  }
+  return null
 }
 
 const scanTransactions = async () => {
@@ -524,41 +612,12 @@ const scanTransactions = async () => {
 
               if (shouldProcess) {
                 try {
-                  if (tx.raw_data.data) {
-                    const note = tronWeb.toUtf8(tx.raw_data.data)
-                    if (note && !shouldFilterNote(note)) {
-                      const { value } = contract.parameter
-                      const fromAddress = tronWeb.address.fromHex(value.owner_address || value.from || value.from_address)
-                      let toAddress = ''
-                      
-                      try {
-                        toAddress = tronWeb.address.fromHex(value.to_address || value.to)
-                      } catch (e) {
-                        console.warn('无法解析接收方地址:', e)
-                      }
-                      
-                      // 只有当发送方和接收方至少有一个地址时才进行地址筛选
-                      if (!fromAddress && !toAddress) {
-                        continue
-                      }
-                      
-                      // 修改地址筛选逻辑，处理空地址的情况
-                      if (checkAddressMatch(fromAddress || '', toAddress || '')) {
-                        transactions.value.push({
-                          block: blockNum,
-                          timestamp: tx.raw_data.timestamp,
-                          hash: tx.txID,
-                          from: fromAddress || '(创建合约)',
-                          to: toAddress || '(合约创建)',
-                          amount: value.amount ? value.amount / 1000000 : '转账',
-                          type: contractType,
-                          note
-                        })
-                      }
-                    }
+                  const result = await processTransaction(tx, blockNum, contract)
+                  if (result) {
+                    transactions.value.push(result)
                   }
                 } catch (e) {
-                  console.error('解析交易备注失败:', e, tx)
+                  console.error('处理交易失败:', e)
                 }
               }
             }
@@ -617,7 +676,8 @@ const saveSettings = () => {
       addressFilterMode: form.value.addressFilterMode,
       addressFilterType: form.value.addressFilterType,
       whitelistAddresses: form.value.whitelistAddresses,
-      blacklistAddresses: form.value.blacklistAddresses
+      blacklistAddresses: form.value.blacklistAddresses,
+      enableContractCheck: form.value.enableContractCheck
     }))
   } catch (e) {
     console.error('保存设置失败:', e)
@@ -878,7 +938,7 @@ h2 {
 .address-link {
   color: #409EFF;
   text-decoration: none;
-  font-family: monospace;
+  white-space: nowrap;
 }
 
 .hash-link:hover,
@@ -933,5 +993,14 @@ h2 {
 .contract-address {
   color: #909399;
   font-family: monospace;
+}
+
+.contract-tag {
+  background-color: #909399;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-left: 4px;
 }
 </style> 
