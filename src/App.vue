@@ -235,7 +235,7 @@
         </el-table-column>
         <el-table-column prop="hash" label="交易哈希" width="160">
           <template #default="{ row }">
-            <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
+            <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link" style="white-space: nowrap; display: inline-block;">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
           </template>
         </el-table-column>
         <el-table-column prop="from" label="发送方" width="280">
@@ -1086,6 +1086,10 @@ h2 {
 .contract-address {
   color: #909399;
   font-family: monospace;
+  background-color: #f4f4f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #e9e9eb;
 }
 
 .contract-tag {
@@ -1214,5 +1218,36 @@ h2 {
 
 :deep(.el-table--border th.el-table__cell.is-leaf) {
   border-right: 1px solid var(--el-table-border-color);
+}
+
+.hash-link {
+  color: #409EFF;
+  text-decoration: none;
+  white-space: nowrap;
+  display: inline-block;
+  font-family: monospace;
+}
+
+.hash-link:hover {
+  text-decoration: underline;
+  color: #66b1ff;
+}
+
+.address-link {
+  color: #409EFF;
+  text-decoration: none;
+  white-space: nowrap;
+  display: inline-block;
+  font-family: monospace;
+  background-color: #f0f9ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #e6f2ff;
+}
+
+.address-link:hover {
+  text-decoration: underline;
+  color: #66b1ff;
+  background-color: #e6f2ff;
 }
 </style> 
