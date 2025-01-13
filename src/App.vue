@@ -249,10 +249,10 @@
 
         <el-table-column prop="from" label="发送方" width="320" align="center">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px">
-              <span style="min-width: 120px; font-family: monospace;">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%">
+              <span style="min-width: 120px; font-family: monospace; text-align: left;">
                 <template v-if="row.from === '(合约创建)'">
-                  <span class="contract-creation">{{ row.from }}</span>
+                  <span class="contract-creation" style="text-align: center; display: block;">{{ row.from }}</span>
                 </template>
                 <template v-else>
                   <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
@@ -271,10 +271,10 @@
 
         <el-table-column prop="to" label="接收方" width="320" align="center">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px">
-              <span style="min-width: 120px; font-family: monospace;">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%">
+              <span style="min-width: 120px; font-family: monospace; text-align: left;">
                 <template v-if="row.to === '(合约创建)'">
-                  <span class="contract-creation">{{ row.to }}</span>
+                  <span class="contract-creation" style="text-align: center; display: block;">{{ row.to }}</span>
                 </template>
                 <template v-else>
                   <a :href="getAddressUrl(row.to)" target="_blank" class="address-link">
