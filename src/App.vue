@@ -123,7 +123,7 @@
             <el-input-number 
               v-model="form.threadCount" 
               :min="2" 
-              :max="10"
+              :max="20"
               style="width: 100px"
             />
             <el-checkbox v-model="form.autoThrottle" style="margin-left: 15px">
@@ -155,6 +155,33 @@
         </el-form-item>
       </div>
     </el-form>
+
+    <!-- 添加地址编辑对话框 -->
+    <el-dialog
+      v-model="addressDialogVisible"
+      :title="form.addressFilterMode === 'whitelist' ? '编辑白名单' : '编辑黑名单'"
+      width="600px"
+    >
+      <div class="address-dialog-content">
+        <div class="address-tips">
+          请输入钱包地址，每行一个：
+        </div>
+        <el-input
+          v-model="addressInput"
+          type="textarea"
+          :rows="15"
+          placeholder="输入钱包地址，每行一个"
+        />
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="addressDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveAddresses">
+            确认
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
 
     <!-- 扫描进度 -->
     <div v-if="loading" class="scan-progress">
@@ -916,20 +943,23 @@ const formatBlocksToTime = (blocks) => {
 .container {
   max-width: 1600px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 10px;
 }
 
 .results {
-  margin-top: 30px;
+  margin-top: 20px;
 }
 
 h1 {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 15px;
+  font-size: 20px;
+  color: #606266;
 }
 
 h2 {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
+  font-size: 16px;
 }
 
 .function-area {
