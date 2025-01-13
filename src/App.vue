@@ -5,13 +5,13 @@
     <el-form :model="form" label-width="80px" class="function-area">
       <!-- 第一行：基础设置 -->
       <div class="form-row">
-        <el-form-item label="网络">
-          <el-select v-model="form.network" placeholder="请选择网络" @change="handleNetworkChange">
-            <el-option label="主网" value="mainnet" />
-            <el-option label="Shasta测试网" value="shasta" />
-            <el-option label="Nile测试网" value="nile" />
-          </el-select>
-        </el-form-item>
+      <el-form-item label="网络">
+        <el-select v-model="form.network" placeholder="请选择网络" @change="handleNetworkChange">
+          <el-option label="主网" value="mainnet" />
+          <el-option label="Shasta测试网" value="shasta" />
+          <el-option label="Nile测试网" value="nile" />
+        </el-select>
+      </el-form-item>
 
         <el-form-item label="扫描顺序">
           <el-radio-group v-model="form.scanOrder">
@@ -33,10 +33,10 @@
 
       <!-- 第二行：区块范围和快速选择 -->
       <div class="form-row">
-        <el-form-item label="区块范围">
+      <el-form-item label="区块范围">
           <div class="range-inputs">
             <el-input-number v-model="form.startBlock" :min="1" :max="form.endBlock || 999999999" placeholder="起始区块" />
-            <span class="separator">至</span>
+          <span class="separator">至</span>
             <el-input-number v-model="form.endBlock" :min="form.startBlock || 1" :max="latestBlock || 999999999" placeholder="结束区块" />
             <div v-if="form.startBlock && form.endBlock" class="block-count">
               <el-tag type="info">
@@ -60,17 +60,17 @@
       <!-- 第三行：区块数量快速选择 -->
       <div class="form-row">
         <el-form-item label="区块数量">
-          <el-button-group>
-            <el-button @click="selectLastNBlocks(100)">最近100个区块</el-button>
-            <el-button @click="selectLastNBlocks(1000)">最近1000个区块</el-button>
+            <el-button-group>
+              <el-button @click="selectLastNBlocks(100)">最近100个区块</el-button>
+              <el-button @click="selectLastNBlocks(1000)">最近1000个区块</el-button>
             <el-button @click="selectLastNBlocks(10000)">最近1万个区块</el-button>
             <el-button @click="selectLastNBlocks(50000)">最近5万个区块</el-button>
             <el-button @click="selectLastNBlocks(100000)">最近10万个区块</el-button>
             <el-button @click="selectLastNBlocks(500000)">最近50万个区块</el-button>
             <el-button @click="selectLastNBlocks(1000000)" type="warning">最近100万个区块</el-button>
-          </el-button-group>
+            </el-button-group>
         </el-form-item>
-      </div>
+          </div>
 
       <!-- 第四行：过滤选项 -->
       <div class="form-row">
@@ -85,8 +85,8 @@
             <el-checkbox v-model="form.filterChineseOnly">
               仅显示中文备注
             </el-checkbox>
-          </div>
-        </el-form-item>
+        </div>
+      </el-form-item>
       </div>
 
       <!-- 第五行：钱包筛选 -->
@@ -130,23 +130,35 @@
               :max="20"
               style="width: 100px"
             />
-            <el-checkbox v-model="form.autoThrottle" style="margin-left: 15px">
-              智能限速
-            </el-checkbox>
+          </template>
+          <el-checkbox v-model="form.autoThrottle" style="margin-left: 15px">
+            智能限速
+          </el-checkbox>
+          <el-checkbox v-model="form.autoCollect" style="margin-left: 15px">
+            自动采集
+          </el-checkbox>
+          <template v-if="form.autoCollect">
+            <span style="margin-left: 15px">采集间隔(秒)：</span>
+            <el-input-number 
+              v-model="form.autoCollectInterval" 
+              :min="1" 
+              :max="60"
+              style="width: 100px"
+            />
           </template>
         </el-form-item>
       </div>
 
       <!-- 第七行：操作按钮 -->
       <div class="form-row">
-        <el-form-item>
+      <el-form-item>
           <el-button 
             type="primary" 
             :loading="loading" 
             @click="scanBlocks"
           >
-            开始扫描
-          </el-button>
+          开始扫描
+        </el-button>
           <el-button 
             type="danger" 
             @click="stopScan" 
@@ -159,15 +171,15 @@
             @click="refreshLatestBlock" 
             :loading="refreshing"
           >
-            刷新最新区块
-          </el-button>
+          刷新最新区块
+        </el-button>
           <div v-if="latestBlock" class="latest-block">
-            <el-alert
-              :title="'当前最新区块: ' + latestBlock"
-              type="info"
-              :closable="false"
-            />
-          </div>
+      <el-alert
+        :title="'当前最新区块: ' + latestBlock"
+        type="info"
+        :closable="false"
+      />
+    </div>
         </el-form-item>
       </div>
     </el-form>
@@ -207,7 +219,7 @@
           <div class="results-content">
             <el-descriptions :column="4" border size="small" class="scan-stats">
               <el-descriptions-item label="扫描区块数">
-                {{ form.endBlock - form.startBlock + 1 }}
+                {{ form.autoCollect ? totalScannedBlocks : (form.endBlock - form.startBlock + 1) }}
               </el-descriptions-item>
               <el-descriptions-item label="成功区块数">
                 {{ successBlocks }}
@@ -353,7 +365,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import TronWeb from 'tronweb'
 
@@ -388,7 +400,9 @@ const form = ref({
   enableContractCheck: false,
   parallelScan: false,
   threadCount: 5,
-  autoThrottle: true
+  autoThrottle: true,
+  autoCollect: false,
+  autoCollectInterval: 10,
 })
 
 const networkAddressLists = ref({
@@ -427,6 +441,10 @@ const totalFailedBlocks = ref(0)
 const failedBlockSet = ref(new Set())
 const maxRetries = 10
 const isInitialLoad = ref(true)
+const autoCollectTimer = ref(null)
+const lastCollectedBlock = ref(null)
+const totalScannedBlocks = ref(0)
+const scannedBlocksSet = ref(new Set())
 
 const rateLimiter = {
   queue: [],
@@ -481,7 +499,7 @@ const refreshLatestBlock = async () => {
     const blockNum = await getLatestBlock()
     if (blockNum) {
       latestBlock.value = blockNum
-      form.value.endBlock = blockNum
+        form.value.endBlock = blockNum
       form.value.startBlock = Math.max(1, blockNum - 99)
     }
   } finally {
@@ -624,7 +642,7 @@ const processTransaction = async (tx, blockNum, contract) => {
   try {
     if (tx.raw_data.data) {
       const tronWeb = getTronWeb()
-      const note = tronWeb.toUtf8(tx.raw_data.data)
+                  const note = tronWeb.toUtf8(tx.raw_data.data)
       if (note && !shouldFilterNote(note)) {
         const { value } = contract.parameter
         const fromAddress = tronWeb.address.fromHex(value.owner_address || value.from || value.from_address)
@@ -660,9 +678,9 @@ const processTransaction = async (tx, blockNum, contract) => {
 
         if (checkAddressMatch(fromAddress || '', toAddress || '')) {
           return {
-            block: blockNum,
+                      block: blockNum,
             timestamp: tx.raw_data.timestamp,
-            hash: tx.txID,
+                      hash: tx.txID,
             from: fromAddress || '(创建合约)',
             fromIsContract: isFromContract,
             to: toAddress || '(合约创建)',
@@ -674,8 +692,8 @@ const processTransaction = async (tx, blockNum, contract) => {
           }
         }
       }
-    }
-  } catch (e) {
+                  }
+                } catch (e) {
     console.error('处理交易失败:', e)
   }
   return null
@@ -687,12 +705,16 @@ const scanBlocks = async () => {
     return
   }
 
-  // 重置计数器
-  successBlocks.value = 0
-  failedBlocks.value = 0
-  totalFailedBlocks.value = 0
-  failedBlockSet.value.clear()
-  transactions.value = []
+  // 只有在非自动采集模式下才清空数据
+  if (!form.value.autoCollect) {
+    successBlocks.value = 0
+    failedBlocks.value = 0
+    totalFailedBlocks.value = 0
+    failedBlockSet.value.clear()
+    scannedBlocksSet.value.clear()
+    transactions.value = []
+    totalScannedBlocks.value = 0
+  }
   scanProgress.value = 0
   
   try {
@@ -703,6 +725,9 @@ const scanBlocks = async () => {
     const startBlock = Number(form.value.startBlock)
     const endBlock = Number(form.value.endBlock)
     const totalBlocks = endBlock - startBlock + 1
+    if (form.value.autoCollect) {
+      totalScannedBlocks.value += totalBlocks
+    }
     
     // 生成区块号数组
     let blockNumbers = Array.from(
@@ -752,11 +777,16 @@ const scanBlocks = async () => {
     if (!scanning.value) {
       return
     }
-
+    
     if (transactions.value.length === 0) {
       ElMessage.info('在指定区块范围内未找到带备注的转账交易')
     } else {
+      // 根据是否是自动采集模式显示不同的消息
+      if (form.value.autoCollect) {
+        ElMessage.success(`本次采集完成，累计找到 ${transactions.value.length} 笔带备注的交易`)
+    } else {
       ElMessage.success(`扫描完成，共找到 ${transactions.value.length} 笔带备注的交易`)
+      }
     }
   } catch (error) {
     console.error('扫描错误:', error)
@@ -792,6 +822,11 @@ const processBlockChunk = async (blockNumbers, tronWeb, isRetry = false) => {
           failedBlocks.value = failedBlockSet.value.size
         }
         successBlocks.value++
+        // 只有当这个区块第一次被扫描时才增加计数
+        if (!scannedBlocksSet.value.has(blockNum)) {
+          scannedBlocksSet.value.add(blockNum)
+          totalScannedBlocks.value = scannedBlocksSet.value.size
+        }
         // 更新进度条为成功区块数的比例
         scanProgress.value = Math.floor(successBlocks.value / totalBlocks * 100)
         
@@ -836,7 +871,10 @@ const loadSettings = () => {
         ...settings,
         startBlock: Number(settings.startBlock) || form.value.startBlock,
         endBlock: Number(settings.endBlock) || form.value.endBlock,
-        threadCount: Number(settings.threadCount) || form.value.threadCount
+        threadCount: Number(settings.threadCount) || form.value.threadCount,
+        // 确保自动采集相关的设置始终使用默认值
+        autoCollect: false,
+        autoCollectInterval: 10,
       }
       // 加载网络相关的黑白名单
       if (settings.networkAddressLists) {
@@ -869,7 +907,7 @@ const saveSettings = () => {
       enableContractCheck: form.value.enableContractCheck,
       parallelScan: form.value.parallelScan,
       threadCount: form.value.threadCount,
-      autoThrottle: form.value.autoThrottle
+      autoThrottle: form.value.autoThrottle,
     }))
     ElMessage.success('设置已保存')
   } catch (e) {
@@ -892,12 +930,20 @@ watch(() => ({
   enableContractCheck: form.value.enableContractCheck,
   parallelScan: form.value.parallelScan,
   threadCount: form.value.threadCount,
-  autoThrottle: form.value.autoThrottle
+  autoThrottle: form.value.autoThrottle,
 }), () => {
   saveSettings()
 }, { 
   deep: true,
   immediate: false 
+})
+
+watch(() => form.value.autoCollect, (newValue) => {
+  if (newValue) {
+    startAutoCollect()
+  } else {
+    stopAutoCollect()
+  }
 })
 
 onMounted(async () => {
@@ -907,6 +953,10 @@ onMounted(async () => {
   nextTick(() => {
     isInitialLoad.value = false
   })
+})
+
+onUnmounted(() => {
+  stopAutoCollect()
 })
 
 const getExplorerBaseUrl = () => {
@@ -1042,6 +1092,66 @@ const formatBlocksToTime = (blocks) => {
 
 const getAddressListCount = (type) => {
   return networkAddressLists.value[form.value.network][`${type}Addresses`].length
+}
+
+const startAutoCollect = async () => {
+  if (!latestBlock.value) {
+    ElMessage.warning('请等待获取最新区块号')
+    return
+  }
+  
+  // 初始化最后采集的区块号
+  if (!lastCollectedBlock.value) {
+    lastCollectedBlock.value = latestBlock.value
+    // 在开始自动采集时，清空之前的数据
+    successBlocks.value = 0
+    failedBlocks.value = 0
+    totalFailedBlocks.value = 0
+    failedBlockSet.value.clear()
+    transactions.value = []
+    totalScannedBlocks.value = 0
+  }
+  
+  // 设置定时器
+  autoCollectTimer.value = setInterval(async () => {
+    try {
+      // 如果正在扫描，跳过这次采集
+      if (loading.value) return
+      
+      // 获取最新区块
+      const newLatestBlock = await getLatestBlock()
+      if (!newLatestBlock) return
+      
+      // 如果有新区块
+      if (newLatestBlock > lastCollectedBlock.value) {
+        // 设置扫描范围为未采集的区块
+        form.value.startBlock = lastCollectedBlock.value + 1
+        form.value.endBlock = newLatestBlock
+        
+        // 更新最新区块显示
+        latestBlock.value = newLatestBlock
+        
+        // 开始扫描
+        await scanBlocks()
+        
+        // 更新最后采集的区块号
+        lastCollectedBlock.value = newLatestBlock
+      }
+    } catch (error) {
+      console.error('自动采集出错:', error)
+    }
+  }, form.value.autoCollectInterval * 1000)
+}
+
+const stopAutoCollect = () => {
+  if (autoCollectTimer.value) {
+    clearInterval(autoCollectTimer.value)
+    autoCollectTimer.value = null
+    lastCollectedBlock.value = null  // 重置最后采集的区块号
+    scannedBlocksSet.value.clear()  // 清空已扫描区块集合
+    totalScannedBlocks.value = 0    // 重置总扫描区块数
+    ElMessage.info('已停止自动采集')
+  }
 }
 </script>
 
