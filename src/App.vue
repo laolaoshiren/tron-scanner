@@ -2,189 +2,159 @@
   <div class="container">
     <h1>Tron交易扫描器</h1>
     
-    <el-form :model="form" label-width="120px">
-      <el-form-item label="网络">
-        <el-select v-model="form.network" placeholder="请选择网络" @change="handleNetworkChange" style="width: 180px">
-          <el-option label="主网" value="mainnet" />
-          <el-option label="Shasta测试网" value="shasta" />
-          <el-option label="Nile测试网" value="nile" />
-        </el-select>
-      </el-form-item>
+    <el-form :model="form" label-width="80px" class="function-area">
+      <!-- 第一行：基础设置 -->
+      <div class="form-row">
+        <el-form-item label="网络">
+          <el-select v-model="form.network" placeholder="请选择网络" @change="handleNetworkChange">
+            <el-option label="主网" value="mainnet" />
+            <el-option label="Shasta测试网" value="shasta" />
+            <el-option label="Nile测试网" value="nile" />
+          </el-select>
+        </el-form-item>
 
-      <el-form-item label="扫描顺序">
-        <el-radio-group v-model="form.scanOrder">
-          <el-radio :value="'asc'">从小到大</el-radio>
-          <el-radio :value="'desc'">从大到小</el-radio>
-        </el-radio-group>
-      </el-form-item>
+        <el-form-item label="扫描顺序">
+          <el-radio-group v-model="form.scanOrder">
+            <el-radio :value="'asc'">从小到大</el-radio>
+            <el-radio :value="'desc'">从大到小</el-radio>
+          </el-radio-group>
+        </el-form-item>
 
-      <el-form-item label="代币类型">
-        <el-checkbox-group v-model="form.tokenTypes">
-          <el-checkbox :value="'TRX'">TRX</el-checkbox>
-          <el-checkbox :value="'TRC20'">TRC20</el-checkbox>
-          <el-checkbox :value="'TRC721'">TRC721</el-checkbox>
-          <el-checkbox :value="'TRC1155'">TRC1155</el-checkbox>
-          <el-checkbox :value="'TRC10'">TRC10</el-checkbox>
-        </el-checkbox-group>
-      </el-form-item>
+        <el-form-item label="代币类型">
+          <el-checkbox-group v-model="form.tokenTypes">
+            <el-checkbox :value="'TRX'">TRX</el-checkbox>
+            <el-checkbox :value="'TRC20'">TRC20</el-checkbox>
+            <el-checkbox :value="'TRC721'">TRC721</el-checkbox>
+            <el-checkbox :value="'TRC1155'">TRC1155</el-checkbox>
+            <el-checkbox :value="'TRC10'">TRC10</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+      </div>
 
-      <el-form-item label="备注过滤">
-        <el-input
-          v-model="form.noteFilter"
-          placeholder="输入关键词过滤掉包含这些关键词的交易（多个关键词用空格分隔）"
-          style="width: 400px"
-          clearable
-        />
-      </el-form-item>
-
-      <el-form-item label="区块范围">
-        <div class="block-range">
-          <el-input-number 
-            v-model="form.startBlock" 
-            :min="1" 
-            :max="form.endBlock || 999999999" 
-            :controls="true"
-            placeholder="起始区块"
-          />
-          <span class="separator">至</span>
-          <el-input-number 
-            v-model="form.endBlock" 
-            :min="form.startBlock || 1" 
-            :max="latestBlock || 999999999" 
-            :controls="true"
-            placeholder="结束区块"
-          />
-          
-          <div v-if="form.startBlock && form.endBlock" class="block-count">
-            <el-tag type="info">
-              总计 {{ form.endBlock - form.startBlock + 1 }} 个区块
-              <template v-if="latestBlock">
-                （约 {{ formatBlocksToTime(form.endBlock - form.startBlock + 1) }}）
-              </template>
-            </el-tag>
+      <!-- 第二行：区块范围和快速选择 -->
+      <div class="form-row">
+        <el-form-item label="区块范围">
+          <div class="range-inputs">
+            <el-input-number v-model="form.startBlock" :min="1" :max="form.endBlock || 999999999" placeholder="起始区块" />
+            <span class="separator">至</span>
+            <el-input-number v-model="form.endBlock" :min="form.startBlock || 1" :max="latestBlock || 999999999" placeholder="结束区块" />
+            <div v-if="form.startBlock && form.endBlock" class="block-count">
+              <el-tag type="info">
+                总计 {{ form.endBlock - form.startBlock + 1 }} 个区块
+                <template v-if="latestBlock">（约 {{ formatBlocksToTime(form.endBlock - form.startBlock + 1) }}）</template>
+              </el-tag>
+            </div>
           </div>
-          
-          <div class="quick-select">
-            <el-button-group class="mb-10">
-              <el-button @click="selectTimeRange('today')">今日</el-button>
-              <el-button @click="selectTimeRange('yesterday')">昨日</el-button>
-              <el-button @click="selectTimeRange('7days')">近7天</el-button>
-              <el-button @click="selectTimeRange('15days')">近15天</el-button>
-            </el-button-group>
-            <el-button-group class="mb-10">
-              <el-button @click="selectLastNBlocks(100)">最近100个区块</el-button>
-              <el-button @click="selectLastNBlocks(1000)">最近1000个区块</el-button>
-              <el-button @click="selectLastNBlocks(10000)">最近1万个区块</el-button>
-            </el-button-group>
-            <el-button-group class="mb-10">
-              <el-button @click="selectLastNBlocks(50000)">最近5万个区块</el-button>
-              <el-button @click="selectLastNBlocks(100000)">最近10万个区块</el-button>
-              <el-button @click="selectLastNBlocks(500000)">最近50万个区块</el-button>
-            </el-button-group>
-            <el-button-group>
-              <el-button @click="selectLastNBlocks(1000000)" type="warning">最近100万个区块</el-button>
-            </el-button-group>
-          </div>
-        </div>
-      </el-form-item>
+        </el-form-item>
 
-      <el-form-item label="钱包筛选">
-        <div style="display: flex; gap: 10px; align-items: center">
-          <el-radio-group v-model="form.addressFilterMode" size="small">
+        <el-form-item label="快速选择">
+          <el-button-group>
+            <el-button @click="selectTimeRange('today')">今日</el-button>
+            <el-button @click="selectTimeRange('yesterday')">昨日</el-button>
+            <el-button @click="selectTimeRange('7days')">近7天</el-button>
+            <el-button @click="selectTimeRange('15days')">近15天</el-button>
+          </el-button-group>
+        </el-form-item>
+      </div>
+
+      <!-- 第三行：区块数量快速选择 -->
+      <div class="form-row">
+        <el-form-item label="区块数量">
+          <el-button-group>
+            <el-button @click="selectLastNBlocks(100)">最近100个区块</el-button>
+            <el-button @click="selectLastNBlocks(1000)">最近1000个区块</el-button>
+            <el-button @click="selectLastNBlocks(10000)">最近1万个区块</el-button>
+            <el-button @click="selectLastNBlocks(50000)">最近5万个区块</el-button>
+            <el-button @click="selectLastNBlocks(100000)">最近10万个区块</el-button>
+            <el-button @click="selectLastNBlocks(500000)">最近50万个区块</el-button>
+            <el-button @click="selectLastNBlocks(1000000)" type="warning">最近100万个区块</el-button>
+          </el-button-group>
+        </el-form-item>
+      </div>
+
+      <!-- 第四行：过滤选项 -->
+      <div class="form-row">
+        <el-form-item label="备注过滤">
+          <el-input
+            v-model="form.noteFilter"
+            placeholder="输入关键词过滤掉包含这些关键词的交易（多个关键词用空格分隔）"
+            clearable
+          />
+        </el-form-item>
+      </div>
+
+      <!-- 第五行：钱包筛选 -->
+      <div class="form-row">
+        <el-form-item label="钱包筛选">
+          <el-radio-group v-model="form.addressFilterMode">
             <el-radio :value="'none'">不启用</el-radio>
             <el-radio :value="'whitelist'">白名单</el-radio>
             <el-radio :value="'blacklist'">黑名单</el-radio>
           </el-radio-group>
-          <el-radio-group v-model="form.addressFilterType" size="small" :disabled="form.addressFilterMode === 'none'">
+          <el-radio-group v-model="form.addressFilterType" :disabled="form.addressFilterMode === 'none'" style="margin-left: 15px">
             <el-radio :value="'both'">发送方或接收方</el-radio>
             <el-radio :value="'from'">仅发送方</el-radio>
             <el-radio :value="'to'">仅接收方</el-radio>
           </el-radio-group>
           <el-button 
             @click="showAddressDialog" 
-            size="small" 
             :disabled="form.addressFilterMode === 'none'"
+            style="margin-left: 15px"
           >
             编辑{{ form.addressFilterMode === 'whitelist' ? '白' : '黑' }}名单
           </el-button>
           <span v-if="form.addressFilterMode !== 'none'" class="address-count">
             ({{ form.addressFilterMode === 'whitelist' ? form.whitelistAddresses.length : form.blacklistAddresses.length }} 个地址)
           </span>
-        </div>
-      </el-form-item>
+        </el-form-item>
+      </div>
 
-      <el-form-item label="高级选项">
-        <div style="display: flex; flex-direction: column; gap: 10px;">
+      <!-- 第六行：高级选项 -->
+      <div class="form-row">
+        <el-form-item label="高级选项">
           <el-checkbox v-model="form.enableContractCheck">
-            检测并标注智能合约地址（会降低扫描速度）
+            检测并标注智能合约地址
           </el-checkbox>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <el-checkbox v-model="form.parallelScan">
-              启用并行扫描（更快的扫描速度）
+          <el-checkbox v-model="form.parallelScan" style="margin-left: 15px">
+            启用并行扫描
+          </el-checkbox>
+          <template v-if="form.parallelScan">
+            <span style="margin-left: 15px">线程数：</span>
+            <el-input-number 
+              v-model="form.threadCount" 
+              :min="2" 
+              :max="10"
+              style="width: 100px"
+            />
+            <el-checkbox v-model="form.autoThrottle" style="margin-left: 15px">
+              智能限速
             </el-checkbox>
-            <template v-if="form.parallelScan">
-              <span>线程数：</span>
-              <el-input-number 
-                v-model="form.threadCount" 
-                :min="2" 
-                :max="10" 
-                size="small"
-              />
-              <el-checkbox v-model="form.autoThrottle">
-                智能限速（自动调整请求频率，避免被限制）
-              </el-checkbox>
-            </template>
-          </div>
-        </div>
-      </el-form-item>
+          </template>
+        </el-form-item>
+      </div>
 
-      <!-- 添加地址编辑对话框 -->
-      <el-dialog
-        v-model="addressDialogVisible"
-        :title="form.addressFilterMode === 'whitelist' ? '编辑白名单' : '编辑黑名单'"
-        width="600px"
-      >
-        <div class="address-dialog-content">
-          <div class="address-tips">
-            请输入钱包地址，每行一个：
+      <!-- 第七行：操作按钮 -->
+      <div class="form-row">
+        <el-form-item>
+          <el-button type="primary" @click="scanTransactions" :loading="loading" v-if="!loading">
+            开始扫描
+          </el-button>
+          <el-button type="danger" @click="stopScan" v-if="loading">
+            停止扫描
+          </el-button>
+          <el-button type="success" @click="refreshLatestBlock" :loading="refreshing">
+            刷新最新区块
+          </el-button>
+          <div v-if="latestBlock" class="latest-block">
+            <el-alert
+              :title="'当前最新区块: ' + latestBlock"
+              type="info"
+              :closable="false"
+            />
           </div>
-          <el-input
-            v-model="addressInput"
-            type="textarea"
-            :rows="15"
-            placeholder="输入钱包地址，每行一个"
-          />
-        </div>
-        <template #footer>
-          <span class="dialog-footer">
-            <el-button @click="addressDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="saveAddresses">
-              确认
-            </el-button>
-          </span>
-        </template>
-      </el-dialog>
-
-      <el-form-item>
-        <el-button type="primary" @click="scanTransactions" :loading="loading" v-if="!loading">
-          开始扫描
-        </el-button>
-        <el-button type="danger" @click="stopScan" v-if="loading">
-          停止扫描
-        </el-button>
-        <el-button @click="refreshLatestBlock" :loading="refreshing">
-          刷新最新区块
-        </el-button>
-      </el-form-item>
+        </el-form-item>
+      </div>
     </el-form>
-
-    <div class="block-info" v-if="latestBlock">
-      <el-alert
-        :title="'当前最新区块: ' + latestBlock"
-        type="info"
-        :closable="false"
-      />
-    </div>
 
     <!-- 扫描进度 -->
     <div v-if="loading" class="scan-progress">
@@ -755,7 +725,10 @@ const loadSettings = () => {
       const settings = JSON.parse(savedSettings)
       form.value = {
         ...form.value,
-        ...settings
+        ...settings,
+        startBlock: Number(settings.startBlock) || form.value.startBlock,
+        endBlock: Number(settings.endBlock) || form.value.endBlock,
+        threadCount: Number(settings.threadCount) || form.value.threadCount
       }
     }
   } catch (e) {
@@ -769,18 +742,24 @@ const saveSettings = () => {
       network: form.value.network,
       scanOrder: form.value.scanOrder,
       tokenTypes: form.value.tokenTypes,
+      startBlock: form.value.startBlock,
+      endBlock: form.value.endBlock,
+      
       noteFilter: form.value.noteFilter,
       addressFilterMode: form.value.addressFilterMode,
       addressFilterType: form.value.addressFilterType,
       whitelistAddresses: form.value.whitelistAddresses,
       blacklistAddresses: form.value.blacklistAddresses,
+      
       enableContractCheck: form.value.enableContractCheck,
       parallelScan: form.value.parallelScan,
       threadCount: form.value.threadCount,
       autoThrottle: form.value.autoThrottle
     }))
+    ElMessage.success('设置已保存')
   } catch (e) {
     console.error('保存设置失败:', e)
+    ElMessage.error('保存设置失败')
   }
 }
 
@@ -788,9 +767,17 @@ watch(() => ({
   network: form.value.network,
   scanOrder: form.value.scanOrder,
   tokenTypes: form.value.tokenTypes,
+  startBlock: form.value.startBlock,
+  endBlock: form.value.endBlock,
   noteFilter: form.value.noteFilter,
-  addressFilter: form.value.addressFilter,
-  addressFilterType: form.value.addressFilterType
+  addressFilterMode: form.value.addressFilterMode,
+  addressFilterType: form.value.addressFilterType,
+  whitelistAddresses: form.value.whitelistAddresses,
+  blacklistAddresses: form.value.blacklistAddresses,
+  enableContractCheck: form.value.enableContractCheck,
+  parallelScan: form.value.parallelScan,
+  threadCount: form.value.threadCount,
+  autoThrottle: form.value.autoThrottle
 }), () => {
   saveSettings()
 }, { deep: true })
@@ -945,105 +932,82 @@ h2 {
   margin-bottom: 20px;
 }
 
-.block-range {
+.function-area {
+  background-color: #f5f7fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.form-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 0;
+  margin-right: 20px;
+}
+
+:deep(.el-form-item:last-child) {
+  margin-right: 0;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
 .separator {
-  margin: 0 10px;
+  margin: 0 5px;
 }
 
-.quick-select {
-  margin-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.block-count {
+  margin-left: 10px;
 }
 
-.mb-10 {
-  margin-bottom: 10px;
-}
-
-.block-info {
-  margin: 20px 0;
+.latest-block {
+  display: inline-block;
+  margin-left: 15px;
 }
 
 :deep(.el-alert) {
-  margin: 20px 0;
+  margin: 0;
+  padding: 8px 16px;
 }
 
-.custom-table {
-  width: 100%;
+:deep(.el-button-group .el-button) {
+  margin: 0;
 }
 
-:deep(.custom-table .el-table__cell) {
-  padding: 8px;
+:deep(.el-input-number) {
+  width: 160px;
 }
 
-:deep(.custom-table .el-table__cell:not(.note-column)) {
-  white-space: nowrap;
+:deep(.el-select) {
+  width: 160px;
 }
 
-.note-content {
-  white-space: pre-wrap;
-  word-break: break-all;
-  line-height: 1.5;
+:deep(.el-radio-group) {
+  display: flex;
+  align-items: center;
 }
 
-:deep(.custom-table .el-table__header th) {
-  background-color: #f5f7fa;
-  color: #606266;
-  font-weight: bold;
-  padding: 8px;
+:deep(.el-checkbox-group) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-:deep(.custom-table .el-table__row) {
-  cursor: default;
-}
-
-:deep(.custom-table .el-table__row:hover td) {
-  background-color: #f5f7fa;
-}
-
-.fixed-column {
-  width: 1%;
-  white-space: nowrap;
-}
-
-.fixed-content {
-  display: inline-block;
-  white-space: nowrap;
-  font-family: monospace;
-}
-
-:deep(.custom-table .el-table__cell) {
-  padding: 8px;
-}
-
-:deep(.custom-table .fixed-column) {
-  white-space: nowrap !important;
-}
-
-.note-content {
-  white-space: pre-wrap;
-  word-break: break-all;
-  line-height: 1.5;
-}
-
-.hash-link,
-.address-link {
-  color: #409EFF;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.hash-link:hover,
-.address-link:hover {
-  text-decoration: underline;
-  color: #66b1ff;
+.address-count {
+  margin-left: 10px;
+  color: #666;
 }
 
 .scan-progress {
