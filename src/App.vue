@@ -177,14 +177,35 @@
             <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
           </template>
         </el-table-column>
-        <el-table-column prop="from" label="发送方" width="180">
+        <el-table-column prop="from" label="发送方" width="280">
           <template #default="{ row }">
-            <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">{{ formatAddress(row.from) }}</a>
+            <div style="display: flex; align-items: center; gap: 4px">
+              <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">{{ formatAddress(row.from) }}</a>
+              <el-button-group size="small">
+                <el-button type="primary" @click="addToWhitelist(row.from)" title="添加到白名单">白</el-button>
+                <el-button type="danger" @click="addToBlacklist(row.from)" title="添加到黑名单">黑</el-button>
+                <el-button type="info" @click="copyAddress(row.from)" title="复制地址">复</el-button>
+              </el-button-group>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="to" label="接收方" width="180">
+        <el-table-column prop="to" label="接收方" width="280">
           <template #default="{ row }">
-            <a :href="getAddressUrl(row.to)" target="_blank" class="address-link">{{ formatAddress(row.to) }}</a>
+            <div style="display: flex; align-items: center; gap: 4px">
+              <span style="min-width: 120px">
+                <template v-if="row.to === '(合约创建)'">
+                  <span class="contract-address">{{ row.to }}</span>
+                </template>
+                <template v-else>
+                  <a :href="getAddressUrl(row.to)" target="_blank" class="address-link">{{ formatAddress(row.to) }}</a>
+                </template>
+              </span>
+              <el-button-group size="small">
+                <el-button type="primary" @click="addToWhitelist(row.to)" title="添加到白名单" :disabled="row.to === '(合约创建)'">白</el-button>
+                <el-button type="danger" @click="addToBlacklist(row.to)" title="添加到黑名单" :disabled="row.to === '(合约创建)'">黑</el-button>
+                <el-button type="info" @click="copyAddress(row.to)" title="复制地址" :disabled="row.to === '(合约创建)'">复</el-button>
+              </el-button-group>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="amount" label="金额(TRX)" width="100">
@@ -316,7 +337,7 @@ const stopScan = () => {
 
 // 格式化地址显示
 const formatAddress = (address) => {
-  if (!address) return ''
+  if (!address || address === '(创建合约)' || address === '(合约创建)') return address
   return `${address.slice(0, 6)}...${address.slice(-6)}`
 }
 
@@ -381,8 +402,8 @@ const saveAddresses = () => {
 const checkAddressMatch = (from, to) => {
   if (form.value.addressFilterMode === 'none') return true
   
-  const fromAddr = from.toLowerCase()
-  const toAddr = to.toLowerCase()
+  const fromAddr = (from || '').toLowerCase()
+  const toAddr = (to || '').toLowerCase()
   const addressList = (form.value.addressFilterMode === 'whitelist' 
     ? form.value.whitelistAddresses 
     : form.value.blacklistAddresses
@@ -391,18 +412,17 @@ const checkAddressMatch = (from, to) => {
   let isInList = false
   switch (form.value.addressFilterType) {
     case 'from':
-      isInList = addressList.includes(fromAddr)
+      isInList = fromAddr && addressList.includes(fromAddr)
       break
     case 'to':
-      isInList = addressList.includes(toAddr)
+      isInList = toAddr && addressList.includes(toAddr)
       break
     case 'both':
     default:
-      isInList = addressList.includes(fromAddr) || addressList.includes(toAddr)
+      isInList = (fromAddr && addressList.includes(fromAddr)) || (toAddr && addressList.includes(toAddr))
       break
   }
   
-  // 白名单模式：在列表中的通过；黑名单模式：不在列表中的通过
   return form.value.addressFilterMode === 'whitelist' ? isInList : !isInList
 }
 
@@ -503,16 +523,27 @@ const scanTransactions = async () => {
                     if (note && !shouldFilterNote(note)) {
                       const { value } = contract.parameter
                       const fromAddress = tronWeb.address.fromHex(value.owner_address || value.from || value.from_address)
-                      const toAddress = tronWeb.address.fromHex(value.to_address || value.to)
+                      let toAddress = ''
                       
-                      // 添加地址筛选检查
-                      if (checkAddressMatch(fromAddress, toAddress)) {
+                      try {
+                        toAddress = tronWeb.address.fromHex(value.to_address || value.to)
+                      } catch (e) {
+                        console.warn('无法解析接收方地址:', e)
+                      }
+                      
+                      // 只有当发送方和接收方至少有一个地址时才进行地址筛选
+                      if (!fromAddress && !toAddress) {
+                        continue
+                      }
+                      
+                      // 修改地址筛选逻辑，处理空地址的情况
+                      if (checkAddressMatch(fromAddress || '', toAddress || '')) {
                         transactions.value.push({
                           block: blockNum,
                           timestamp: tx.raw_data.timestamp,
                           hash: tx.txID,
-                          from: fromAddress,
-                          to: toAddress,
+                          from: fromAddress || '(创建合约)',
+                          to: toAddress || '(合约创建)',
                           amount: value.amount ? value.amount / 1000000 : '转账',
                           type: contractType,
                           note
@@ -628,6 +659,39 @@ const getTxUrl = (hash) => {
 // 获取地址URL
 const getAddressUrl = (address) => {
   return `${getExplorerBaseUrl()}/#/address/${address}`
+}
+
+// 添加到白名单
+const addToWhitelist = (address) => {
+  if (!form.value.whitelistAddresses.includes(address)) {
+    form.value.whitelistAddresses.push(address)
+    ElMessage.success('已添加到白名单')
+    saveSettings()
+  } else {
+    ElMessage.info('该地址已在白名单中')
+  }
+}
+
+// 添加到黑名单
+const addToBlacklist = (address) => {
+  if (!form.value.blacklistAddresses.includes(address)) {
+    form.value.blacklistAddresses.push(address)
+    ElMessage.success('已添加到黑名单')
+    saveSettings()
+  } else {
+    ElMessage.info('该地址已在黑名单中')
+  }
+}
+
+// 复制地址
+const copyAddress = async (address) => {
+  try {
+    await navigator.clipboard.writeText(address)
+    ElMessage.success('地址已复制')
+  } catch (err) {
+    console.error('复制失败:', err)
+    ElMessage.error('复制失败，请手动复制')
+  }
 }
 </script>
 
@@ -793,5 +857,10 @@ h2 {
 .address-count {
   color: #666;
   font-size: 13px;
+}
+
+.contract-address {
+  color: #909399;
+  font-family: monospace;
 }
 </style> 
