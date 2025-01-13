@@ -55,6 +55,15 @@
             placeholder="结束区块"
           />
           
+          <div v-if="form.startBlock && form.endBlock" class="block-count">
+            <el-tag type="info">
+              总计 {{ form.endBlock - form.startBlock + 1 }} 个区块
+              <template v-if="latestBlock">
+                （约 {{ formatBlocksToTime(form.endBlock - form.startBlock + 1) }}）
+              </template>
+            </el-tag>
+          </div>
+          
           <div class="quick-select">
             <el-button-group class="mb-10">
               <el-button @click="selectTimeRange('today')">今日</el-button>
@@ -105,9 +114,28 @@
       </el-form-item>
 
       <el-form-item label="高级选项">
-        <el-checkbox v-model="form.enableContractCheck">
-          检测并标注智能合约地址（会降低扫描速度）
-        </el-checkbox>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <el-checkbox v-model="form.enableContractCheck">
+            检测并标注智能合约地址（会降低扫描速度）
+          </el-checkbox>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <el-checkbox v-model="form.parallelScan">
+              启用并行扫描（更快的扫描速度）
+            </el-checkbox>
+            <template v-if="form.parallelScan">
+              <span>线程数：</span>
+              <el-input-number 
+                v-model="form.threadCount" 
+                :min="2" 
+                :max="10" 
+                size="small"
+              />
+              <el-checkbox v-model="form.autoThrottle">
+                智能限速（自动调整请求频率，避免被限制）
+              </el-checkbox>
+            </template>
+          </div>
+        </div>
       </el-form-item>
 
       <!-- 添加地址编辑对话框 -->
@@ -173,6 +201,22 @@
 
     <div v-if="transactions.length > 0" class="results">
       <h2>扫描结果</h2>
+      <div class="scan-stats">
+        <el-descriptions :column="4" border>
+          <el-descriptions-item label="扫描区块数">
+            {{ form.endBlock - form.startBlock + 1 }}
+          </el-descriptions-item>
+          <el-descriptions-item label="成功区块数">
+            {{ successBlocks }}
+          </el-descriptions-item>
+          <el-descriptions-item label="失败区块数">
+            {{ failedBlocks }}
+          </el-descriptions-item>
+          <el-descriptions-item label="找到交易数">
+            {{ transactions.length }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
       <el-table :data="transactions" style="width: 100%" class="custom-table">
         <el-table-column prop="block" label="区块" width="100">
           <template #default="{ row }">
@@ -189,15 +233,15 @@
             <a :href="getTxUrl(row.hash)" target="_blank" class="hash-link">{{ row.hash.slice(0, 8) }}...{{ row.hash.slice(-8) }}</a>
           </template>
         </el-table-column>
-        <el-table-column prop="from" label="发送方" width="320">
+        <el-table-column prop="from" label="发送方" width="300">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 4px">
-              <span style="min-width: 150px; font-family: monospace;">
+            <div style="display: flex; align-items: center; gap: 2px">
+              <span style="min-width: 140px; font-family: monospace;">
                 <a :href="getAddressUrl(row.from)" target="_blank" class="address-link">
                   {{ formatAddress(row.from, row.fromIsContract) }}
                 </a>
               </span>
-              <el-button-group size="small">
+              <el-button-group size="small" style="transform: scale(0.9);">
                 <el-button type="primary" @click="addToWhitelist(row.from)" title="添加到白名单">白</el-button>
                 <el-button type="danger" @click="addToBlacklist(row.from)" title="添加到黑名单">黑</el-button>
                 <el-button type="info" @click="copyAddress(row.from)" title="复制地址">复</el-button>
@@ -205,10 +249,10 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="to" label="接收方" width="320">
+        <el-table-column prop="to" label="接收方" width="300">
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 4px">
-              <span style="min-width: 150px; font-family: monospace;">
+            <div style="display: flex; align-items: center; gap: 2px">
+              <span style="min-width: 140px; font-family: monospace;">
                 <template v-if="row.to === '(合约创建)'">
                   <span class="contract-address">{{ row.to }}</span>
                 </template>
@@ -218,7 +262,7 @@
                   </a>
                 </template>
               </span>
-              <el-button-group size="small">
+              <el-button-group size="small" style="transform: scale(0.9);">
                 <el-button type="primary" @click="addToWhitelist(row.to)" title="添加到白名单" :disabled="row.to === '(合约创建)'">白</el-button>
                 <el-button type="danger" @click="addToBlacklist(row.to)" title="添加到黑名单" :disabled="row.to === '(合约创建)'">黑</el-button>
                 <el-button type="info" @click="copyAddress(row.to)" title="复制地址" :disabled="row.to === '(合约创建)'">复</el-button>
@@ -271,11 +315,14 @@ const form = ref({
   scanOrder: 'desc',
   tokenTypes: ['TRX'],
   noteFilter: '',
-  addressFilterMode: 'none',  // 'none', 'whitelist', 'blacklist'
-  addressFilterType: 'both',  // 'both', 'from', 'to'
-  whitelistAddresses: [],  // 白名单地址列表
-  blacklistAddresses: [],  // 黑名单地址列表
-  enableContractCheck: false  // 是否启用合约检测
+  addressFilterMode: 'none',
+  addressFilterType: 'both',
+  whitelistAddresses: [],
+  blacklistAddresses: [],
+  enableContractCheck: false,
+  parallelScan: false,
+  threadCount: 5,
+  autoThrottle: true
 })
 
 const loading = ref(false)
@@ -287,9 +334,42 @@ const scanProgress = ref(0)
 const currentScanningBlock = ref(0)
 const addressDialogVisible = ref(false)
 const addressInput = ref('')
-const contractCache = ref(new Map())  // 缓存合约检查结果
+const contractCache = ref(new Map())
+const successBlocks = ref(0)
+const failedBlocks = ref(0)
 
-// 获取最新区块号
+const rateLimiter = {
+  queue: [],
+  lastRequestTime: 0,
+  minInterval: 50,
+  maxInterval: 2000,
+  currentInterval: 50,
+  errorCount: 0,
+  
+  async wait() {
+    const now = Date.now()
+    const timeToWait = Math.max(0, this.lastRequestTime + this.currentInterval - now)
+    if (timeToWait > 0) {
+      await new Promise(resolve => setTimeout(resolve, timeToWait))
+    }
+    this.lastRequestTime = Date.now()
+  },
+  
+  success() {
+    this.errorCount = Math.max(0, this.errorCount - 1)
+    if (this.errorCount === 0 && this.currentInterval > this.minInterval) {
+      this.currentInterval = Math.max(this.minInterval, this.currentInterval * 0.8)
+    }
+  },
+  
+  error() {
+    this.errorCount++
+    if (this.errorCount > 2) {
+      this.currentInterval = Math.min(this.maxInterval, this.currentInterval * 1.5)
+    }
+  }
+}
+
 const getLatestBlock = async () => {
   const tronWeb = getTronWeb()
   try {
@@ -305,31 +385,27 @@ const getLatestBlock = async () => {
   }
 }
 
-// 刷新最新区块
 const refreshLatestBlock = async () => {
   refreshing.value = true
   try {
     const blockNum = await getLatestBlock()
     if (blockNum) {
       latestBlock.value = blockNum
-      // 设置默认显示最近100个区块
       form.value.endBlock = blockNum
-      form.value.startBlock = Math.max(1, blockNum - 99) // -99是因为要包含当前区块
+      form.value.startBlock = Math.max(1, blockNum - 99)
     }
   } finally {
     refreshing.value = false
   }
 }
 
-// 处理网络变化
 const handleNetworkChange = async () => {
   form.value.startBlock = 1
-  form.value.endBlock = null  // 设为null，等待获取最新区块后再设置
+  form.value.endBlock = null
   transactions.value = []
   await refreshLatestBlock()
 }
 
-// 快捷选择最近的N个区块
 const selectLastNBlocks = (n) => {
   if (!latestBlock.value) {
     ElMessage.warning('请等待获取最新区块号')
@@ -348,20 +424,17 @@ const getTronWeb = () => {
   })
 }
 
-// 停止扫描
 const stopScan = () => {
   scanning.value = false
   loading.value = false
   ElMessage.info('已停止扫描')
 }
 
-// 格式化地址显示
 const formatAddress = (address, isContract) => {
   if (!address || address === '(创建合约)' || address === '(合约创建)') return address
   return `${isContract ? '[合] ' : ''}${address.slice(0, 6)}...${address.slice(-6)}`
 }
 
-// 格式化时间显示
 const formatTime = (timestamp) => {
   if (!timestamp) return ''
   const date = new Date(timestamp)
@@ -376,13 +449,11 @@ const formatTime = (timestamp) => {
   })
 }
 
-// 格式化进度显示
 const progressFormat = (percentage) => {
   const currentBlock = form.value.startBlock + Math.floor((form.value.endBlock - form.value.startBlock) * percentage / 100)
   return `已扫描至区块 ${currentBlock} (${percentage}%)`
 }
 
-// 检查备注是否应该被过滤掉
 const shouldFilterNote = (note) => {
   if (!form.value.noteFilter) return false
   const keywords = form.value.noteFilter.toLowerCase().split(/\s+/).filter(k => k)
@@ -391,7 +462,6 @@ const shouldFilterNote = (note) => {
   return keywords.some(keyword => noteText.includes(keyword))
 }
 
-// 显示地址编辑对话框
 const showAddressDialog = () => {
   const addresses = form.value.addressFilterMode === 'whitelist' 
     ? form.value.whitelistAddresses 
@@ -400,17 +470,16 @@ const showAddressDialog = () => {
   addressDialogVisible.value = true
 }
 
-// 保存地址列表
 const saveAddresses = () => {
   const addresses = addressInput.value
     .split('\n')
     .map(addr => addr.trim())
-    .filter(addr => addr && addr.length === 34)  // Tron 地址长度为 34
+    .filter(addr => addr && addr.length === 34)
   
   if (form.value.addressFilterMode === 'whitelist') {
-    form.value.whitelistAddresses = [...new Set(addresses)]  // 去重
+    form.value.whitelistAddresses = [...new Set(addresses)]
   } else {
-    form.value.blacklistAddresses = [...new Set(addresses)]  // 去重
+    form.value.blacklistAddresses = [...new Set(addresses)]
   }
   
   addressDialogVisible.value = false
@@ -418,7 +487,6 @@ const saveAddresses = () => {
   ElMessage.success(`已保存 ${addresses.length} 个有效${form.value.addressFilterMode === 'whitelist' ? '白名单' : '黑名单'}地址`)
 }
 
-// 检查地址是否匹配筛选条件
 const checkAddressMatch = (from, to) => {
   if (form.value.addressFilterMode === 'none') return true
   
@@ -446,11 +514,9 @@ const checkAddressMatch = (from, to) => {
   return form.value.addressFilterMode === 'whitelist' ? isInList : !isInList
 }
 
-// 检查地址是否为智能合约
 const checkIsContract = async (address) => {
   if (!address || address === '(创建合约)' || address === '(合约创建)') return false
   
-  // 先检查缓存
   if (contractCache.value.has(address)) {
     return contractCache.value.get(address)
   }
@@ -459,7 +525,6 @@ const checkIsContract = async (address) => {
     const tronWeb = getTronWeb()
     const code = await tronWeb.trx.getContract(address)
     const isContract = !!code
-    // 缓存结果
     contractCache.value.set(address, isContract)
     return isContract
   } catch (e) {
@@ -468,7 +533,6 @@ const checkIsContract = async (address) => {
   }
 }
 
-// 修改交易处理逻辑，根据开关决定是否检测合约
 const processTransaction = async (tx, blockNum, contract) => {
   try {
     if (tx.raw_data.data) {
@@ -490,7 +554,6 @@ const processTransaction = async (tx, blockNum, contract) => {
         let isFromContract = false
         let isToContract = false
 
-        // 只在启用合约检测时执行检查
         if (form.value.enableContractCheck) {
           [isFromContract, isToContract] = await Promise.all([
             checkIsContract(fromAddress),
@@ -546,13 +609,14 @@ const scanTransactions = async () => {
   transactions.value = []
   scanProgress.value = 0
   currentScanningBlock.value = form.value.startBlock
+  successBlocks.value = 0
+  failedBlocks.value = 0
   const tronWeb = getTronWeb()
 
   try {
     const totalBlocks = form.value.endBlock - form.value.startBlock + 1
     let blockNumbers = []
     
-    // 根据扫描顺序生成区块序列
     if (form.value.scanOrder === 'asc') {
       for (let i = form.value.startBlock; i <= form.value.endBlock; i++) {
         blockNumbers.push(i)
@@ -563,70 +627,93 @@ const scanTransactions = async () => {
       }
     }
 
-    for (let i = 0; i < blockNumbers.length; i++) {
-      if (!scanning.value) {
-        break
+    if (form.value.parallelScan) {
+      const chunkSize = Math.ceil(blockNumbers.length / form.value.threadCount)
+      const chunks = []
+      
+      for (let i = 0; i < blockNumbers.length; i += chunkSize) {
+        chunks.push(blockNumbers.slice(i, i + chunkSize))
       }
 
-      const blockNum = blockNumbers[i]
-      currentScanningBlock.value = blockNum
-      const block = await tronWeb.trx.getBlock(blockNum)
-      
-      if (block && block.transactions) {
-        for (const tx of block.transactions) {
-          if (tx.raw_data && tx.raw_data.contract) {
-            for (const contract of tx.raw_data.contract) {
-              // 检查交易类型是否匹配选择的代币类型
-              const contractType = contract.type
-              let shouldProcess = false
+      const tasks = chunks.map(async (chunk, index) => {
+        for (let i = 0; i < chunk.length; i++) {
+          if (!scanning.value) break
 
-              if (form.value.tokenTypes.includes('TRX') && contractType === 'TransferContract') {
-                shouldProcess = true
-              } else if (form.value.tokenTypes.includes('TRC20') && contractType === 'TriggerSmartContract') {
-                // 检查是否是TRC20转账
-                try {
-                  const functionSelector = contract.parameter.value.data.slice(0, 8)
-                  if (functionSelector === 'a9059cbb') {  // transfer方法的selector
-                    shouldProcess = true
+          const blockNum = chunk[i]
+          currentScanningBlock.value = blockNum
+
+          try {
+            if (form.value.autoThrottle) {
+              await rateLimiter.wait()
+            }
+
+            const block = await tronWeb.trx.getBlock(blockNum)
+            
+            if (form.value.autoThrottle) {
+              rateLimiter.success()
+            }
+
+            if (block && block.transactions) {
+              successBlocks.value++
+              for (const tx of block.transactions) {
+                if (!scanning.value) break
+                
+                if (tx.raw_data && tx.raw_data.contract) {
+                  for (const contract of tx.raw_data.contract) {
+                    const result = await processTransaction(tx, blockNum, contract)
+                    if (result) {
+                      transactions.value.push(result)
+                    }
                   }
-                } catch (e) {}
-              } else if (form.value.tokenTypes.includes('TRC721') && contractType === 'TriggerSmartContract') {
-                // 检查是否是TRC721转账
-                try {
-                  const functionSelector = contract.parameter.value.data.slice(0, 8)
-                  if (functionSelector === '23b872dd') {  // transferFrom方法的selector
-                    shouldProcess = true
-                  }
-                } catch (e) {}
-              } else if (form.value.tokenTypes.includes('TRC1155') && contractType === 'TriggerSmartContract') {
-                // 检查是否是TRC1155转账
-                try {
-                  const functionSelector = contract.parameter.value.data.slice(0, 8)
-                  if (functionSelector === 'f242432a' || functionSelector === '2eb2c2d6') {  // safeTransferFrom或safeBatchTransferFrom
-                    shouldProcess = true
-                  }
-                } catch (e) {}
-              } else if (form.value.tokenTypes.includes('TRC10') && contractType === 'TransferAssetContract') {
-                shouldProcess = true
+                }
               }
+            }
+          } catch (error) {
+            failedBlocks.value++
+            console.error(`扫描区块 ${blockNum} 失败:`, error)
+            if (form.value.autoThrottle) {
+              rateLimiter.error()
+              if (error.message.includes('rate limit') || error.message.includes('too many requests')) {
+                await new Promise(resolve => setTimeout(resolve, 5000))
+              }
+            }
+          }
 
-              if (shouldProcess) {
-                try {
+          const processedCount = chunks.slice(0, index).reduce((sum, c) => sum + c.length, 0) + i + 1
+          scanProgress.value = Math.floor(processedCount / totalBlocks * 100)
+        }
+      })
+
+      await Promise.all(tasks)
+    } else {
+      for (let i = 0; i < blockNumbers.length; i++) {
+        if (!scanning.value) break
+
+        const blockNum = blockNumbers[i]
+        currentScanningBlock.value = blockNum
+        
+        try {
+          const block = await tronWeb.trx.getBlock(blockNum)
+          if (block && block.transactions) {
+            successBlocks.value++
+            for (const tx of block.transactions) {
+              if (tx.raw_data && tx.raw_data.contract) {
+                for (const contract of tx.raw_data.contract) {
                   const result = await processTransaction(tx, blockNum, contract)
                   if (result) {
                     transactions.value.push(result)
                   }
-                } catch (e) {
-                  console.error('处理交易失败:', e)
                 }
               }
             }
           }
+        } catch (error) {
+          failedBlocks.value++
+          console.error(`扫描区块 ${blockNum} 失败:`, error)
         }
-      }
 
-      // 更新进度
-      scanProgress.value = Math.floor((i + 1) / totalBlocks * 100)
+        scanProgress.value = Math.floor((i + 1) / totalBlocks * 100)
+      }
     }
     
     if (!scanning.value) {
@@ -649,7 +736,6 @@ const scanTransactions = async () => {
   }
 }
 
-// 从localStorage加载设置
 const loadSettings = () => {
   try {
     const savedSettings = localStorage.getItem('tronScannerSettings')
@@ -665,7 +751,6 @@ const loadSettings = () => {
   }
 }
 
-// 保存设置到localStorage
 const saveSettings = () => {
   try {
     localStorage.setItem('tronScannerSettings', JSON.stringify({
@@ -677,14 +762,16 @@ const saveSettings = () => {
       addressFilterType: form.value.addressFilterType,
       whitelistAddresses: form.value.whitelistAddresses,
       blacklistAddresses: form.value.blacklistAddresses,
-      enableContractCheck: form.value.enableContractCheck
+      enableContractCheck: form.value.enableContractCheck,
+      parallelScan: form.value.parallelScan,
+      threadCount: form.value.threadCount,
+      autoThrottle: form.value.autoThrottle
     }))
   } catch (e) {
     console.error('保存设置失败:', e)
   }
 }
 
-// 监听设置变化并保存
 watch(() => ({
   network: form.value.network,
   scanOrder: form.value.scanOrder,
@@ -696,13 +783,11 @@ watch(() => ({
   saveSettings()
 }, { deep: true })
 
-// 页面加载时自动获取最新区块和加载设置
 onMounted(async () => {
-  loadSettings()  // 先加载设置
-  await refreshLatestBlock()  // 然后刷新区块
+  loadSettings()
+  await refreshLatestBlock()
 })
 
-// 获取区块浏览器的基础URL
 const getExplorerBaseUrl = () => {
   const network = form.value.network
   switch (network) {
@@ -717,17 +802,14 @@ const getExplorerBaseUrl = () => {
   }
 }
 
-// 获取交易URL
 const getTxUrl = (hash) => {
   return `${getExplorerBaseUrl()}/#/transaction/${hash}`
 }
 
-// 获取地址URL
 const getAddressUrl = (address) => {
   return `${getExplorerBaseUrl()}/#/address/${address}`
 }
 
-// 添加到白名单
 const addToWhitelist = (address) => {
   if (!form.value.whitelistAddresses.includes(address)) {
     form.value.whitelistAddresses.push(address)
@@ -738,7 +820,6 @@ const addToWhitelist = (address) => {
   }
 }
 
-// 添加到黑名单
 const addToBlacklist = (address) => {
   if (!form.value.blacklistAddresses.includes(address)) {
     form.value.blacklistAddresses.push(address)
@@ -749,7 +830,6 @@ const addToBlacklist = (address) => {
   }
 }
 
-// 复制地址
 const copyAddress = async (address) => {
   try {
     await navigator.clipboard.writeText(address)
@@ -760,30 +840,27 @@ const copyAddress = async (address) => {
   }
 }
 
-// 根据时间范围选择区块
 const selectTimeRange = (range) => {
   if (!latestBlock.value) {
     ElMessage.warning('请等待获取最新区块号')
     return
   }
 
-  const BLOCKS_PER_DAY = 28800  // 3秒一个区块，一天约28800个区块
+  const BLOCKS_PER_DAY = 28800
   const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())  // 今天0:00
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const yesterdayStart = new Date(todayStart)
-  yesterdayStart.setDate(yesterdayStart.getDate() - 1)  // 昨天0:00
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1)
   const sevenDaysAgoStart = new Date(todayStart)
-  sevenDaysAgoStart.setDate(sevenDaysAgoStart.getDate() - 7)  // 7天前0:00
+  sevenDaysAgoStart.setDate(sevenDaysAgoStart.getDate() - 7)
   const fifteenDaysAgoStart = new Date(todayStart)
-  fifteenDaysAgoStart.setDate(fifteenDaysAgoStart.getDate() - 15)  // 15天前0:00
+  fifteenDaysAgoStart.setDate(fifteenDaysAgoStart.getDate() - 15)
 
-  // 计算最新区块对应的时间戳（秒）
   const latestBlockTime = Math.floor(Date.now() / 1000)
   let startBlock, endBlock
 
   switch (range) {
     case 'today': {
-      // 计算今天0点对应的区块
       const secondsSinceLatestBlock = latestBlockTime - Math.floor(todayStart.getTime() / 1000)
       const blocksSinceStart = Math.floor(secondsSinceLatestBlock / 3)
       startBlock = latestBlock.value - blocksSinceStart
@@ -791,7 +868,6 @@ const selectTimeRange = (range) => {
       break
     }
     case 'yesterday': {
-      // 计算昨天0点和今天0点对应的区块
       const secondsSinceLatestBlock = latestBlockTime - Math.floor(todayStart.getTime() / 1000)
       const blocksSinceToday = Math.floor(secondsSinceLatestBlock / 3)
       const yesterdayBlocks = BLOCKS_PER_DAY
@@ -800,7 +876,6 @@ const selectTimeRange = (range) => {
       break
     }
     case '7days': {
-      // 计算7天前0点对应的区块
       const secondsSinceLatestBlock = latestBlockTime - Math.floor(sevenDaysAgoStart.getTime() / 1000)
       const blocksSinceStart = Math.floor(secondsSinceLatestBlock / 3)
       startBlock = latestBlock.value - blocksSinceStart
@@ -808,7 +883,6 @@ const selectTimeRange = (range) => {
       break
     }
     case '15days': {
-      // 计算15天前0点对应的区块
       const secondsSinceLatestBlock = latestBlockTime - Math.floor(fifteenDaysAgoStart.getTime() / 1000)
       const blocksSinceStart = Math.floor(secondsSinceLatestBlock / 3)
       startBlock = latestBlock.value - blocksSinceStart
@@ -817,12 +891,25 @@ const selectTimeRange = (range) => {
     }
   }
 
-  // 确保起始区块不小于1
   startBlock = Math.max(1, startBlock)
   form.value.startBlock = startBlock
   form.value.endBlock = endBlock
 
   ElMessage.success(`已选择区块范围：${startBlock} - ${endBlock}`)
+}
+
+const formatBlocksToTime = (blocks) => {
+  const seconds = blocks * 3  // TRON 3秒一个区块
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  
+  const parts = []
+  if (days > 0) parts.push(`${days}天`)
+  if (hours > 0) parts.push(`${hours}小时`)
+  if (minutes > 0) parts.push(`${minutes}分钟`)
+  
+  return parts.join('')
 }
 </script>
 
@@ -1002,5 +1089,47 @@ h2 {
   border-radius: 4px;
   font-size: 12px;
   margin-left: 4px;
+}
+
+.scan-stats {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1);
+}
+
+:deep(.scan-stats .el-descriptions__label) {
+  width: 100px;
+  color: #606266;
+  font-weight: bold;
+}
+
+:deep(.scan-stats .el-descriptions__content) {
+  color: #409EFF;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.block-count {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+}
+
+:deep(.block-count .el-tag) {
+  font-family: monospace;
+  padding: 0 12px;
+  height: 32px;
+  line-height: 32px;
+  font-size: 14px;
+}
+
+:deep(.el-button-group .el-button--small) {
+  padding: 5px 8px;
+}
+
+:deep(.el-button-group) {
+  margin-left: -2px;
 }
 </style> 
