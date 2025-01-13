@@ -186,7 +186,7 @@
       />
     </div>
 
-    <!-- 添加进度条 -->
+    <!-- 扫描进度 -->
     <div v-if="loading" class="scan-progress">
       <div class="current-block">
         正在扫描区块: {{ currentScanningBlock }}
@@ -199,7 +199,8 @@
       />
     </div>
 
-    <div v-if="transactions.length > 0" class="results">
+    <!-- 扫描结果 -->
+    <div v-if="loading || transactions.length > 0" class="results">
       <h2>扫描结果</h2>
       <div class="scan-stats">
         <el-descriptions :column="4" border>
