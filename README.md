@@ -1,4 +1,9 @@
 # Tron 交易扫描器
+![Visitors](https://visitor-badge.laobi.icu/badge?page_id=laolaoshiren.tron-scanner)
+![GitHub stars](https://img.shields.io/github/stars/laolaoshiren/tron-scanner?style=social)
+![GitHub forks](https://img.shields.io/github/forks/laolaoshiren/tron-scanner?style=social)
+![GitHub issues](https://img.shields.io/github/issues/laolaoshiren/tron-scanner)
+![GitHub license](https://img.shields.io/github/license/laolaoshiren/tron-scanner)
 
 一个功能强大的 Tron 区块链交易扫描工具，支持多网络、多代币类型的交易备注扫描。
 
